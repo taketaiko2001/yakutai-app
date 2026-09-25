@@ -1,0 +1,4 @@
+# 公開しないもの（実際のカルテ写真・テスト・元のフォント）
+samples_private/
+test/
+fonts_src/

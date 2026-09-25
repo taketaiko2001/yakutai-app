@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f7a57">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="薬袋プリント">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>薬袋プリント</title>
+<link rel="stylesheet" href="css/app.css">
+<style id="yt-css"></style>
+</head>
+<body>
+<header class="bar">
+  <h1>薬袋プリント</h1>
+  <button class="btn ghost" id="btnMenu">メニュー</button>
+</header>
+
+<main>
+  <!-- ① 撮影 -->
+  <section class="card">
+    <h2><span class="num">1</span>カルテを撮影</h2>
+    <div class="row2">
+      <label class="btn primary big">
+        <input type="file" accept="image/*" capture="environment" id="camInput" hidden>カメラで撮影
+      </label>
+      <label class="btn big">
+        <input type="file" accept="image/*" id="fileInput" hidden>写真を選ぶ
+      </label>
+    </div>
+    <p class="note" id="photoNote">処方欄が大きく、明るく、真上から写るように撮ってください。読み取りはこの端末の中だけで行います（外部に送信しません）。</p>
+    <div class="photo" id="photoBox" hidden>
+      <img id="photo" alt="カルテ写真">
+      <div class="photo-tools">
+        <button class="btn tiny" id="btnZoom">大きく見る</button>
+        <button class="btn tiny" id="btnReread">もう一度読み取る</button>
+      </div>
+    </div>
+    <p class="status" id="ocrStatus" hidden></p>
+  </section>
+
+  <!-- ② カルテの内容 -->
+  <section class="card">
+    <h2><span class="num">2</span>カルテの内容</h2>
+    <p class="note">カルテと同じ書き方で1行に1つ。読めなかった行は「#」付きで残ります（「#」の行は無視されます）。</p>
+    <textarea id="karteText" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"
+      placeholder="例)&#10;8.9.25&#10;シナール配合錠 3T&#10;3×N 60TD&#10;ヘパlo 3本 顔保湿"></textarea>
+
+    <div class="sub">
+      <div class="sub-title">よく使う処方（タップで追加・使うほど学習）</div>
+      <div class="chips-scroll" id="presetBox"></div>
+    </div>
+    <div class="sub">
+      <div class="drug-add">
+        <input id="drugSearch" list="drugList" placeholder="薬を検索（ひらがな可）" autocomplete="off">
+        <datalist id="drugList"></datalist>
+        <button class="btn" id="btnAddDrug">行を追加</button>
+      </div>
+    </div>
+    <details class="sub" id="tokenBox">
+      <summary>入力ボタン（数量・用法・日数・部位）</summary>
+      <div class="trow"><span>数量</span><div class="tokens" data-tokens="1T 2T 3T 1C 1包 3包 1本 2本 3本 5本 10本"></div></div>
+      <div class="trow"><span>用法</span><div class="tokens" data-tokens="3×N 2×N 1×朝 1×夕 1×ねる前 頓用"></div></div>
+      <div class="trow"><span>日数</span><div class="tokens" data-tokens="7TD 14TD 28TD 30TD 60TD 90TD"></div></div>
+      <div class="trow"><span>外用</span><div class="tokens" data-tokens="1日1回 1日2回 1日3回"></div></div>
+      <div class="trow"><span>部位</span><div class="tokens" id="siteTokens"></div></div>
+    </details>
+    <button class="btn primary wide" id="btnParse">↓ 薬袋の文字を作る</button>
+  </section>
+
+  <!-- ③ 薬袋 -->
+  <section class="card" id="bagSection">
+    <h2><span class="num">3</span>薬袋の内容</h2>
+    <div class="common">
+      <label>患者名 <input id="cName" placeholder="空欄なら印字しません"> 様</label>
+      <label>交付日 令和<input id="cYear" class="num-in" inputmode="numeric">年<input id="cMonth" class="num-in" inputmode="numeric">月<input id="cDay" class="num-in" inputmode="numeric">日</label>
+    </div>
+    <div id="bagList"></div>
+    <div class="row2">
+      <button class="btn" id="addNaifuku">＋ のみぐすり袋</button>
+      <button class="btn" id="addGaiyou">＋ 外用薬袋</button>
+    </div>
+  </section>
+
+  <!-- ④ 印刷 -->
+  <section class="card">
+    <h2><span class="num">4</span>印刷</h2>
+    <p class="note">印刷されるのは<b>黒い文字と丸だけ</b>です（プレビューの薄い図は位置の目安）。</p>
+    <div class="previews" id="previewList"></div>
+    <label class="check"><input type="checkbox" id="chkVerified"> カルテと照合し、内容を確認しました</label>
+    <button class="btn primary wide" id="btnPdf" disabled>印刷用PDFを作る</button>
+    <div id="pdfResult"></div>
+    <button class="btn wide ghost" id="btnNext">次の患者へ（クリア）</button>
+  </section>
+</main>
+
+<!-- 写真の拡大表示 -->
+<dialog id="dlgPhoto" class="full"><div class="viewer"><img id="photoBig" alt=""></div><form method="dialog"><button class="btn primary wide">閉じる</button></form></dialog>
+
+<!-- メニュー -->
+<dialog id="dlgMenu" class="full">
+  <div class="menu">
+    <div class="menu-head"><b>メニュー</b><button class="btn" id="btnMenuClose">閉じる</button></div>
+
+    <details open>
+      <summary>袋のサイズのルール</summary>
+      <p class="note">上から順に調べ、最初に当てはまったルールのサイズにします。どれにも当てはまらなければ小さい袋。袋のサイズを手で変えたときにも「覚えますか？」と聞いてルールを増やします。</p>
+      <ol id="ruleList" class="rule-list"></ol>
+      <div class="form-box">
+        <b>ルールを追加</b>
+        <select id="rKind">
+          <option value="any_of">薬の名前のどれかが入っている</option>
+          <option value="all_of">薬の名前がすべて入っている（セット）</option>
+          <option value="qty_at_least">本数（数量）が○以上</option>
+          <option value="containers_at_least">混合容器が○個以上</option>
+          <option value="days_at_least">内服の日数が○日分以上</option>
+        </select>
+        <input id="rWords" placeholder="薬の名前（読点「、」区切り。例: ヘパリン、ヒルドイド）">
+        <div class="row2"><input id="rN" type="number" placeholder="数（例: 9）"><select id="rUnit"><option>本</option><option>g</option><option>枚</option></select></div>
+        <div class="row2"><select id="rSize"><option value="A5">大きい袋にする</option><option value="small">小さい袋にする</option></select><input id="rMemo" placeholder="メモ（任意）"></div>
+        <button class="btn primary" id="btnAddRule">追加</button>
+      </div>
+    </details>
+
+    <details>
+      <summary>薬品マスタ（院内の薬）</summary>
+      <p class="note">「よみ・略称」にカルテでの書き方（ヘパlo、GMo など）やひらがなを入れると、読み取り・検索で見つかりやすくなります。外用の回数は、書いていないときに使う回数です。</p>
+      <input id="drugFilter" placeholder="絞り込み">
+      <div id="drugTable" class="drug-table"></div>
+      <div class="form-box" id="drugForm">
+        <b id="drugFormTitle">薬を追加</b>
+        <input id="dName" placeholder="薬品名">
+        <div class="row2">
+          <select id="dType"><option value="naifuku">内服</option><option value="gaiyou">外用</option></select>
+          <select id="dForm"></select>
+        </div>
+        <div class="row2"><input id="dTimes" placeholder="外用の1日回数（例: 2）" inputmode="numeric"><input id="dNote" placeholder="備考"></div>
+        <input id="dAliases" placeholder="よみ・略称（空白区切り）">
+        <div class="row2"><button class="btn primary" id="btnSaveDrug">保存</button><button class="btn" id="btnCancelDrug">新規にする</button></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>部位の一覧</summary>
+      <p class="note">1行に1つ。「印字する文字 よみ よみ…」（空白区切り）。例: 顔保湿 カオホシツ かおほしつ</p>
+      <textarea id="siteEdit" rows="8"></textarea>
+      <button class="btn primary" id="btnSaveSites">保存</button>
+    </details>
+
+    <details>
+      <summary>印刷の設定・位置の調整</summary>
+      <div class="field"><b>PDFの用紙</b>
+        <select id="sPaper">
+          <option value="bag">袋と同じ大きさ（おすすめ）</option>
+          <option value="A4">A4（210×297mm）</option>
+          <option value="A5">A5（148×210mm）</option>
+          <option value="A6">A6（105×148mm）</option>
+          <option value="hagaki">はがき（100×148mm）</option>
+        </select>
+        <p class="note">プリンターが袋の大きさを選べない場合に、決まった用紙の上に袋を置く位置（用紙の左上から袋の左上まで、mm）を指定します。</p>
+        <div class="row2"><label>右へ <input id="sPaperX" type="number" step="0.5"> mm</label><label>下へ <input id="sPaperY" type="number" step="0.5"> mm</label></div>
+      </div>
+      <div class="field"><b>袋の寸法（mm）</b>
+        <div class="row2"><label>小 横<input id="szSW" type="number" step="0.5"></label><label>縦<input id="szSH" type="number" step="0.5"></label></div>
+        <div class="row2"><label>大 横<input id="szLW" type="number" step="0.5"></label><label>縦<input id="szLH" type="number" step="0.5"></label></div>
+      </div>
+      <div class="field"><b>文字の位置の補正（mm）</b>
+        <p class="note">テスト印刷で文字が右にずれたらXをマイナス、下にずれたらYをマイナス。</p>
+        <div id="calibBox"></div>
+      </div>
+      <button class="btn primary" id="btnSavePrint">保存</button>
+    </details>
+
+    <details>
+      <summary>学習データ・バックアップ</summary>
+      <p id="learnInfo" class="note"></p>
+      <p class="note">学習した内容・マスタ・設定はこの端末だけに保存されています。機種変更や別の端末に移すときは「バックアップを保存」→ 新しい端末で「バックアップから戻す」。</p>
+      <div class="row2"><button class="btn" id="btnExport">バックアップを保存</button>
+        <label class="btn"><input type="file" id="importInput" accept="application/json,.json" hidden>バックアップから戻す</label></div>
+      <button class="btn danger" id="btnResetLearn">学習した内容を消す</button>
+    </details>
+
+    <details>
+      <summary>その他</summary>
+      <div class="field"><b>外用薬で回数が書いていない薬の1日回数（薬品マスタに回数がない場合）</b><input id="sGaiyouTimes" inputmode="numeric"></div>
+      <div class="field"><b>年の書き方</b><select id="sYear"><option value="reiwa">令和8 年</option><option value="number">8 年</option></select></div>
+      <button class="btn primary" id="btnSaveOther">保存</button>
+      <p class="note" id="versionInfo"></p>
+    </details>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+<div class="busy" id="busy" hidden><div class="busy-box"><div class="spinner"></div><p id="busyText">処理中…</p></div></div>
+
+<script src="lib/ort.wasm.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/fontkit.umd.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/render.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
