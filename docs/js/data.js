@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 1,
+ "version": 2,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -11,7 +11,9 @@ window.DEFAULT_DATA = {
     "しなーる",
     "シナール"
    ],
-   "note": ""
+   "note": "",
+   "common": true,
+   "dose": "3T"
   },
   {
    "name": "トラネキサム酸錠",
@@ -23,7 +25,9 @@ window.DEFAULT_DATA = {
     "トラネキサム",
     "トランサミン"
    ],
-   "note": ""
+   "note": "",
+   "common": true,
+   "dose": "3T"
   },
   {
    "name": "ユベラ錠50mg",
@@ -34,7 +38,9 @@ window.DEFAULT_DATA = {
     "ゆべら",
     "ユベラ"
    ],
-   "note": ""
+   "note": "",
+   "common": true,
+   "dose": "3T"
   },
   {
    "name": "レボセチリジン塩酸塩錠",
@@ -46,7 +52,23 @@ window.DEFAULT_DATA = {
     "レボセチリジン",
     "ザイザル"
    ],
-   "note": ""
+   "note": "",
+   "common": true,
+   "dose": "1T"
+  },
+  {
+   "name": "ロラタジン錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "ロラタジン",
+    "クラリチン",
+    "ろらたじん"
+   ],
+   "note": "",
+   "common": true,
+   "dose": "1T"
   },
   {
    "name": "フェキソフェナジン塩酸塩錠",
@@ -66,9 +88,13 @@ window.DEFAULT_DATA = {
    "times": "",
    "aliases": [
     "おろぱたじん",
-    "アレロック"
+    "アレロック",
+    "オロパ",
+    "オロパタジン"
    ],
-   "note": ""
+   "note": "",
+   "common": true,
+   "dose": "2T"
   },
   {
    "name": "エピナスチン塩酸塩錠",
@@ -144,7 +170,8 @@ window.DEFAULT_DATA = {
     "ミノマイシン",
     "ミノ"
    ],
-   "note": ""
+   "note": "",
+   "common": true
   },
   {
    "name": "ドキシサイクリン塩酸塩錠",
@@ -343,9 +370,11 @@ window.DEFAULT_DATA = {
     "ヘパlo",
     "ヘパローション",
     "へぱろーしょん",
-    "ヒルドイドローション"
+    "ヒルドイドローション",
+    "ヘパロ"
    ],
-   "note": ""
+   "note": "",
+   "common": true
   },
   {
    "name": "ヘパリン類似物質クリーム",
@@ -355,9 +384,11 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ヘパcr",
     "ヘパクリーム",
-    "ヒルドイドクリーム"
+    "ヒルドイドクリーム",
+    "ヘパcn"
    ],
-   "note": ""
+   "note": "",
+   "common": true
   },
   {
    "name": "ヘパリン類似物質油性クリーム",
@@ -390,7 +421,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "パンデルlo"
    ],
-   "note": ""
+   "note": "",
+   "common": true
   },
   {
    "name": "パンデル軟膏",
@@ -425,7 +457,8 @@ window.DEFAULT_DATA = {
     "げんたしん",
     "ゲンタマイシン"
    ],
-   "note": ""
+   "note": "",
+   "common": true
   },
   {
    "name": "リンデロンVG軟膏",
@@ -608,9 +641,11 @@ window.DEFAULT_DATA = {
    "form": "ぬり薬",
    "times": "1",
    "aliases": [
-    "ぜびあっくす"
+    "ぜびあっくす",
+    "ゼビアックスlo"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "common": true
   },
   {
    "name": "アクアチムクリーム",
@@ -763,15 +798,267 @@ window.DEFAULT_DATA = {
    "note": "添付文書の用法: 1日1回"
   },
   {
-   "name": "サヘパー（混合軟膏）",
+   "name": "サヘパ（混合軟膏）",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
     "サヘパ",
-    "サヘパー"
+    "サヘパー",
+    "さへぱ"
    ],
-   "note": "混合容器。中身と表記は要確認"
+   "note": "サレックス＋ヘパリン類似物質の混合。容器番号 2=30g・3=50g（例: サヘパ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "ベタヘパ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ベタヘパ",
+    "ベヘパ",
+    "べたへぱ"
+   ],
+   "note": "ベタ＋ヘパリン類似物質の混合。容器番号 2=30g・3=50g（例: ベタヘパ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "ロヘパ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ロヘパ",
+    "ろへぱ"
+   ],
+   "note": "ロコイド＋ヘパリン類似物質の混合。容器番号 2=30g・3=50g（例: ロヘパ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "クロヘパ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "クロヘパ",
+    "くろへぱ"
+   ],
+   "note": "クロ＋ヘパリン類似物質の混合。容器番号 2=30g・3=50g（例: クロヘパ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "サZ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "サZ",
+    "サz",
+    "サゼット"
+   ],
+   "note": "サレックス＋亜鉛華軟膏の混合。容器番号 2=30g・3=50g（例: サZ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "ベZ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ベZ",
+    "ベz",
+    "ベタZ",
+    "ベゼット"
+   ],
+   "note": "ベタ＋亜鉛華軟膏の混合。容器番号 2=30g・3=50g（例: ベZ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "ロZ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ロZ",
+    "ロz",
+    "ロゼット"
+   ],
+   "note": "ロコイド＋亜鉛華軟膏の混合。容器番号 2=30g・3=50g（例: ロZ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "クロZ（混合軟膏）",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "クロZ",
+    "クロz",
+    "クロゼット"
+   ],
+   "note": "クロ＋亜鉛華軟膏の混合。容器番号 2=30g・3=50g（例: クロZ-3×2）",
+   "mix": true,
+   "common": true
+  },
+  {
+   "name": "ゼビアックス油性クリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ゼビアックスcr",
+    "ゼビアックスcn",
+    "ゼビアックスクリーム",
+    "ぜびあっくすくりーむ"
+   ],
+   "note": "添付文書の用法: 1日1回",
+   "common": true
+  },
+  {
+   "name": "ベピオウォッシュゲル",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ベピオウォッシュ",
+    "べぴおうぉっしゅ"
+   ],
+   "note": "添付文書の用法: 1日1回",
+   "common": true
+  },
+  {
+   "name": "クリンダマイシンゲル",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "クリンダゲル",
+    "クリーゲル",
+    "クリンダ",
+    "ダラシンゲル",
+    "くりんだ"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "デルモベートスカルプローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "デルモlo",
+    "デルモ",
+    "でるもろーしょん"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "クロベタゾールプロピオン酸エステルローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "クロ(P)lo",
+    "クロPlo",
+    "クロlo",
+    "くろべたぞーる"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "ケラチナミンクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ケラチナミン",
+    "ケラチナミンcn",
+    "けらちなみん"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "塩化アルミニウム液",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "",
+   "aliases": [
+    "塩Al",
+    "塩化Al",
+    "塩アル",
+    "えんかあるみにうむ"
+   ],
+   "note": "院内製剤（例: 塩Al 60cc 夜1）",
+   "common": true
+  },
+  {
+   "name": "レスタミンコーワクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "レスタミン",
+    "レスタミンクリーム",
+    "れすたみん"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "スピラゾン軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "スピラゾン",
+    "スピラゾンo",
+    "すぴらぞん"
+   ],
+   "note": "",
+   "common": true
+  },
+  {
+   "name": "トプシムクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "トプシム",
+    "トプシムcn",
+    "とぷしむ"
+   ],
+   "note": "",
+   "common": true
+  }
+ ],
+ "sets": [
+  {
+   "name": "しみ3つ",
+   "aliases": [
+    "しみ3つ",
+    "シミ3つ",
+    "しみ3",
+    "シミ3ツ",
+    "しみ三つ"
+   ],
+   "lines": [
+    "シナール配合錠 3T",
+    "トラネキサム酸錠 3T",
+    "ユベラ錠50mg 3T"
+   ],
+   "usage": "3×N"
   }
  ],
  "sites": [
@@ -780,7 +1067,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "カオホシツ",
     "かおほしつ",
-    "顔ほしつ"
+    "顔ほしつ",
+    "顔ホシツ"
    ]
   },
   {
@@ -831,21 +1119,6 @@ window.DEFAULT_DATA = {
    ]
   },
   {
-   "label": "顔",
-   "aliases": [
-    "カオ",
-    "かお"
-   ]
-  },
-  {
-   "label": "あたま",
-   "aliases": [
-    "アタマ",
-    "頭",
-    "頭皮"
-   ]
-  },
-  {
    "label": "くび",
    "aliases": [
     "クビ",
@@ -870,6 +1143,97 @@ window.DEFAULT_DATA = {
    "aliases": [
     "アシ"
    ]
+  },
+  {
+   "label": "顔ニキビ",
+   "aliases": [
+    "カオニキビ",
+    "かおにきび",
+    "顔にきび"
+   ]
+  },
+  {
+   "label": "顔わるいところ",
+   "aliases": [
+    "カオワルイトコロ",
+    "かおわるいところ"
+   ]
+  },
+  {
+   "label": "体わるいところ",
+   "aliases": [
+    "カラダワルイトコロ",
+    "体ワルイトコロ",
+    "からだわるいところ"
+   ]
+  },
+  {
+   "label": "体かゆいところ",
+   "aliases": [
+    "カラダカユイトコロ",
+    "体カユイトコロ",
+    "からだかゆいところ"
+   ]
+  },
+  {
+   "label": "くちわるいところ",
+   "aliases": [
+    "クチワルイトコロ",
+    "口わるいところ"
+   ]
+  },
+  {
+   "label": "足かさかさ",
+   "aliases": [
+    "アシカサカサ",
+    "足カサカサ",
+    "あしかさかさ"
+   ]
+  },
+  {
+   "label": "足汗止め",
+   "aliases": [
+    "アシアセドメ",
+    "足アセドメ",
+    "足汗どめ",
+    "あしあせどめ"
+   ]
+  },
+  {
+   "label": "おやゆび",
+   "aliases": [
+    "オヤユビ",
+    "親指"
+   ]
+  },
+  {
+   "label": "虫さされ",
+   "aliases": [
+    "ムシササレ",
+    "虫ササレ",
+    "むしさされ"
+   ]
+  },
+  {
+   "label": "からだ",
+   "aliases": [
+    "カラダ",
+    "体"
+   ]
+  },
+  {
+   "label": "頭",
+   "aliases": [
+    "アタマ",
+    "あたま"
+   ]
+  },
+  {
+   "label": "かお",
+   "aliases": [
+    "カオ",
+    "顔"
+   ]
   }
  ],
  "layout": {
@@ -877,9 +1241,8 @@ window.DEFAULT_DATA = {
   "sizes": {
    "small": {
     "label": "小",
-    "width_mm": 110,
-    "height_mm": 156,
-    "_メモ": "仮の寸法。実物を測って書き換える"
+    "width_mm": 100,
+    "height_mm": 140
    },
    "A5": {
     "label": "大",
@@ -943,7 +1306,8 @@ window.DEFAULT_DATA = {
       "y": 607,
       "align": "center",
       "size": 62,
-      "bold": true
+      "bold": true,
+      "maxw": 120
      },
      "days": {
       "x": 645,
@@ -1102,7 +1466,8 @@ window.DEFAULT_DATA = {
       "y": 642,
       "align": "center",
       "size": 62,
-      "bold": true
+      "bold": true,
+      "maxw": 120
      },
      "site": {
       "x": 722,
@@ -1110,7 +1475,7 @@ window.DEFAULT_DATA = {
       "align": "left",
       "size": 46,
       "bold": true,
-      "maxw": 200
+      "maxw": 255
      },
      "zayaku_temp": {
       "x": 550,
@@ -1196,7 +1561,8 @@ window.DEFAULT_DATA = {
    "kind": "containers_at_least",
    "n": 2,
    "size": "A5",
-   "memo": "混合容器が2個以上（例: サヘパー 3×2）"
+   "memo": "混合容器（2番=30g・3番=50g）が2個以上（例: サヘパ-3×2）",
+   "minNo": 2
   },
   {
    "id": "r3",
@@ -1210,18 +1576,17 @@ window.DEFAULT_DATA = {
    "id": "r4",
    "kind": "any_of",
    "words": [
-    "ヘパリン",
-    "ヒルドイド",
-    "ヘパ"
+    "ヘパリン類似物質",
+    "ヒルドイド"
    ],
    "size": "A5",
-   "memo": "ヘパリン系の薬"
+   "memo": "ヘパリン系の薬（ヘパlo・ヘパcn など。ロヘパなどの混合軟膏は除く）"
   }
  ],
  "presets": [
   {
    "title": "しみ3点セット",
-   "text": "シナール配合錠 3T\nトラネキサム酸錠 3T\nユベラ錠50mg 3T\n3×N 60TD"
+   "text": "しみ3つ\n3×N 60TD"
   }
  ]
 };

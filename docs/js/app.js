@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-25";
+const APP_VERSION = "2026-09-25b";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -11,6 +11,7 @@ const NAIFUKU_FORMS = ["錠剤", "カプセル", "こな薬"];
 const S = {
   bags: [], common: { name: "", year: "", month: "", day: "" },
   photo: null, photoUrl: "", ocrInitial: "", pdfs: [],
+  readLines: [],   // 読み取った行（写真の切り抜き・選び直し候補つき）
 };
 
 // ---------------------------------------------------------------- 共通
@@ -20,7 +21,7 @@ function busy(on, text) { $("#busy").hidden = !on; if (text) $("#busyText").text
 function today() { const d = new Date(); return { year: String(d.getFullYear() - 2018), month: String(d.getMonth() + 1), day: String(d.getDate()) }; }
 function ctx(allowUnknown) {
   const d = Store.data;
-  return { drugs: d.drugs, sites: d.sites, learn: d.learn, gaiyouDefaultTimes: d.settings.gaiyouDefaultTimes, allowUnknown };
+  return { drugs: d.drugs, sites: d.sites, sets: d.sets || [], learn: d.learn, gaiyouDefaultTimes: d.settings.gaiyouDefaultTimes, allowUnknown };
 }
 function commonForPrint() {
   const y = toHalf(S.common.year);
@@ -63,26 +64,91 @@ async function readPhoto() {
   const st = $("#ocrStatus");
   busy(true, "読み取りの準備中…");
   try {
-    const lines = await LocalOCR.recognize(S.photo, msg => busy(true, msg));
-    const res = KarteParser.parse(lines.map(l => l.text).join("\n"), ctx(false));
-    $("#karteText").value = res.text;
-    S.ocrInitial = res.text;
+    const d = Store.data;
+    const lex = KarteReader.buildLexicon(d, d.learn);
+    const t0 = performance.now();
+    const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), KarteReader.keepChars(lex));
+    const rows = KarteReader.makeRows(items);
+    const lines = KarteReader.read(rows, lex);
+    applyOcrFix(lines);
+    S.readLines = lines.filter(l => l.kind !== "date").map(l => ({ text: l.text, cur: l.text, kind: l.kind, alts: l.alts, raw: rowRaw(l.row), img: cropRow(canvas, l.row.box) }));
+    const text = lines.map(l => l.text).join("\n");
+    $("#karteText").value = text;
+    S.ocrInitial = lines.map(l => ({ text: l.text, raw: rowRaw(l.row) }));
+    const res = KarteParser.parse(text, ctx(false));
     applyParsed(res);
-    const n = res.ignored.length;
+    renderReadRows();
+    const unsure = lines.filter(l => l.kind === "raw" || /？$/.test(l.text)).length;
     st.hidden = false;
-    st.className = "status" + (n ? " warn" : "");
-    st.textContent = `読み取りました（薬袋 ${res.bags.length} 袋分）。` + (n ? `読めなかった行が ${n} 行あります。写真と見比べて②で直し、「薬袋の文字を作る」を押してください。` : "写真と見比べて確認してください。");
+    st.className = "status" + (unsure ? " warn" : "");
+    st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分）。` +
+      (unsure ? `自信のない行が ${unsure} 行あります。下の「読み取った行」で写真と見比べ、違っていれば候補をタップしてください。` : "写真と見比べて確認してください。");
   } catch (e) {
     st.hidden = false; st.className = "status warn";
     st.textContent = "読み取りできませんでした: " + e.message + "（②に手で入力しても使えます）";
   } finally { busy(false); }
 }
 
+function rowRaw(row) { return row ? [row.ta, row.tb].join(" | ") : ""; }
+// 読み取った行の部分を写真から切り抜く（確認用の小さな画像）
+function cropRow(canvas, box) {
+  if (!box) return "";
+  const pad = (box.bottom - box.top) * 0.25;
+  const x = Math.max(0, box.x - pad), y = Math.max(0, box.top - pad);
+  const w = Math.min(canvas.width, box.x2 + pad) - x, h = Math.min(canvas.height, box.bottom + pad) - y;
+  if (w < 4 || h < 4) return "";
+  const H = 96, W = Math.min(900, Math.round(w * H / h));
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  cv.getContext("2d").drawImage(canvas, x, y, w, h, 0, 0, W, H);
+  return cv.toDataURL("image/jpeg", 0.75);
+}
+// 以前に人が直した読み違いと同じものは、直した内容に置き換える
+function applyOcrFix(lines) {
+  const learn = Store.data.learn;
+  if (!learn.ocrFix || !Object.keys(learn.ocrFix).length) return;
+  for (const l of lines) {
+    if (l.kind === "date" || !(l.kind === "raw" || /？$/.test(l.text))) continue;
+    const fix = KarteParser.lookupOcrFix(rowRaw(l.row), learn);
+    if (fix) {
+      l.alts = [{ label: "前回の訂正", text: fix }, ...l.alts];
+      l.text = fix + " ？"; l.kind = "learned";
+    }
+  }
+}
+
 // ---------------------------------------------------------------- ② カルテの内容
-function parseText() {
+function parseText(noScroll) {
   const res = KarteParser.parse($("#karteText").value, ctx(true));
   applyParsed(res);
-  $("#bagSection").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (noScroll !== true) $("#bagSection").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+// 読み取った行ごとに、写真の切り抜きと選び直し候補を出す
+function renderReadRows() {
+  const box = $("#readRows");
+  if (!S.readLines.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="sub-title">読み取った行（写真と見比べて、違っていれば候補をタップ）</div>` + S.readLines.map((l, i) => {
+    const bad = l.kind === "raw" || /？$/.test(l.cur);
+    return `<div class="rr${bad ? " rr-bad" : ""}" data-r="${i}">
+      ${l.img ? `<img src="${l.img}" alt="">` : ""}
+      <div class="rr-cur">${bad ? "⚠ " : "✓ "}${esc(l.cur.replace(/^#\s*/, "（読めません）"))}</div>
+      ${l.alts.length ? `<div class="rr-alts">${l.alts.map((a, k) => `<button type="button" class="tok${a.text === l.cur ? " on" : ""}" data-alt="${k}">${esc(a.label)}</button>`).join("")}
+        <button type="button" class="tok" data-alt="del">この行は不要</button></div>` : ""}
+    </div>`;
+  }).join("");
+}
+function chooseAlt(i, k) {
+  const l = S.readLines[i];
+  const next = k === "del" ? "# " + l.cur.replace(/^#\s*/, "") : l.alts[+k].text;
+  const ta = $("#karteText");
+  const lines = ta.value.split("\n");
+  const at = lines.findIndex(x => x.trim() === l.cur.trim());
+  if (at >= 0) lines[at] = next; else lines.push(next);
+  ta.value = lines.join("\n");
+  l.cur = next;
+  renderReadRows();
+  parseText(true);
 }
 function applyParsed(res) {
   const d = res.date || {};
@@ -291,6 +357,7 @@ async function makePdfs() {
       S.pdfs.push({ label, count: group.length, file: new File([bytes], `薬袋_${label}_${ymd}.pdf`, { type: "application/pdf" }) });
     }
     Store.learnFrom(S.bags, S.ocrInitial, $("#karteText").value);
+    S.ocrInitial = [];
     renderHelpers();
     renderPdfResult();
   } catch (e) {
@@ -318,7 +385,8 @@ function openPdf(i) {
 }
 function clearAll() {
   if (!confirm("次の患者に進みます。入力内容と写真を消しますか？")) return;
-  S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = [];
+  S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = []; S.readLines = [];
+  renderReadRows();
   S.common = Object.assign({ name: "" }, today());
   $("#karteText").value = ""; $("#photoBox").hidden = true; $("#ocrStatus").hidden = true;
   $("#chkVerified").checked = false; $("#pdfResult").innerHTML = "";
@@ -392,8 +460,9 @@ function bindMenu() {
     if ((kind === "any_of" || kind === "all_of") && !words.length) return alert("薬の名前を入れてください");
     if (!["any_of", "all_of"].includes(kind) && !(n > 0)) return alert("数を入れてください");
     const r = { id: "r" + Date.now(), kind, words, n, unit: $("#rUnit").value, size: $("#rSize").value, memo: $("#rMemo").value.trim() };
+    if (kind === "containers_at_least" && +$("#rNo").value > 0) r.minNo = +$("#rNo").value;
     Store.data.rules.unshift(r); Store.save();
-    ["#rWords", "#rN", "#rMemo"].forEach(s => { $(s).value = ""; });
+    ["#rWords", "#rN", "#rMemo", "#rNo"].forEach(s => { $(s).value = ""; });
     renderMenu(); reapplySizes();
   };
   $("#drugFilter").oninput = renderDrugTable;
@@ -496,6 +565,10 @@ function init() {
   $("#btnAddDrug").onclick = addDrug;
   $("#drugSearch").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addDrug(); } });
   $("#btnParse").onclick = parseText;
+  $("#readRows").addEventListener("click", e => {
+    const b = e.target.closest("[data-alt]");
+    if (b) chooseAlt(+b.closest("[data-r]").dataset.r, b.dataset.alt);
+  });
 
   const bindC = (sel, key) => $(sel).addEventListener("input", e => { S.common[key] = e.target.value; schedulePreview(); });
   bindC("#cName", "name"); bindC("#cYear", "year"); bindC("#cMonth", "month"); bindC("#cDay", "day");

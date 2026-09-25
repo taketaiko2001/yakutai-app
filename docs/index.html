@@ -45,9 +45,10 @@
   <!-- ② カルテの内容 -->
   <section class="card">
     <h2><span class="num">2</span>カルテの内容</h2>
-    <p class="note">カルテと同じ書き方で1行に1つ。読めなかった行は「#」付きで残ります（「#」の行は無視されます）。</p>
+    <p class="note">カルテと同じ書き方で1行に1つ。読めなかった行は「#」付き（無視されます）、自信のない行は末尾に「？」が付きます。</p>
     <textarea id="karteText" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"
-      placeholder="例)&#10;8.9.25&#10;シナール配合錠 3T&#10;3×N 60TD&#10;ヘパlo 3本 顔保湿"></textarea>
+      placeholder="例)&#10;8.9.25&#10;しみ3つ&#10;3×N 60TD&#10;ヘパlo 3本 (顔保湿)&#10;ロヘパ-2 (顔わるいところ)"></textarea>
+    <div class="read-rows" id="readRows" hidden></div>
 
     <div class="sub">
       <div class="sub-title">よく使う処方（タップで追加・使うほど学習）</div>
@@ -62,10 +63,10 @@
     </div>
     <details class="sub" id="tokenBox">
       <summary>入力ボタン（数量・用法・日数・部位）</summary>
-      <div class="trow"><span>数量</span><div class="tokens" data-tokens="1T 2T 3T 1C 1包 3包 1本 2本 3本 5本 10本"></div></div>
+      <div class="trow"><span>数量</span><div class="tokens" data-tokens="1T 2T 3T 1C 1包 1本 2本 3本 4本 5本 10本 -2 -3 ×2 60cc"></div></div>
       <div class="trow"><span>用法</span><div class="tokens" data-tokens="3×N 2×N 1×朝 1×夕 1×ねる前 頓用"></div></div>
       <div class="trow"><span>日数</span><div class="tokens" data-tokens="7TD 14TD 28TD 30TD 60TD 90TD"></div></div>
-      <div class="trow"><span>外用</span><div class="tokens" data-tokens="1日1回 1日2回 1日3回"></div></div>
+      <div class="trow"><span>外用</span><div class="tokens" data-tokens="1日1回 1日2回 1日3回 夜1 1日数回 (〃)"></div></div>
       <div class="trow"><span>部位</span><div class="tokens" id="siteTokens"></div></div>
     </details>
     <button class="btn primary wide" id="btnParse">↓ 薬袋の文字を作る</button>
@@ -115,11 +116,12 @@
           <option value="any_of">薬の名前のどれかが入っている</option>
           <option value="all_of">薬の名前がすべて入っている（セット）</option>
           <option value="qty_at_least">本数（数量）が○以上</option>
-          <option value="containers_at_least">混合容器が○個以上</option>
+          <option value="containers_at_least">混合容器（ロヘパ-2 など）が○個以上</option>
           <option value="days_at_least">内服の日数が○日分以上</option>
         </select>
         <input id="rWords" placeholder="薬の名前（読点「、」区切り。例: ヘパリン、ヒルドイド）">
-        <div class="row2"><input id="rN" type="number" placeholder="数（例: 9）"><select id="rUnit"><option>本</option><option>g</option><option>枚</option></select></div>
+        <div class="row2"><input id="rN" type="number" placeholder="数（例: 9）"><select id="rUnit"><option>本</option><option>g</option><option>枚</option><option>cc</option></select></div>
+        <input id="rNo" type="number" placeholder="混合容器の場合：容器の番号が○番以上（例: 2。空欄なら番号は問わない）">
         <div class="row2"><select id="rSize"><option value="A5">大きい袋にする</option><option value="small">小さい袋にする</option></select><input id="rMemo" placeholder="メモ（任意）"></div>
         <button class="btn primary" id="btnAddRule">追加</button>
       </div>
@@ -202,6 +204,7 @@
 <script src="js/data.js"></script>
 <script src="js/render.js"></script>
 <script src="js/parser.js"></script>
+<script src="js/reader.js"></script>
 <script src="js/store.js"></script>
 <script src="js/ocr.js"></script>
 <script src="js/pdf.js"></script>

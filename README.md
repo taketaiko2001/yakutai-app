@@ -4,6 +4,7 @@
 
 - 読み取り（文字認識）・PDF作成はすべて端末の中で行い、カルテ画像や患者情報は外部に送信しません
 - 一度開けば電波がなくても使えます（ホーム画面に追加するとアプリのように使えます）
-- 学習した内容（よく使う処方・読み違いの訂正・袋サイズのルール）は端末の中に保存されます
+- 手書きの読み取りは、院内の薬・部位の一覧と照らし合わせて最も当てはまるものを選びます。読み取った行ごとに写真の切り抜きと候補が出るので、違っていればタップで選び直せます
+- 学習した内容（よく使う処方・よく使う薬・読み違いの訂正・袋サイズのルール）は端末の中に保存されます
 
-使用しているもの: PP-OCRv5（PaddleOCR, Apache-2.0）、onnxruntime-web（MIT）、pdf-lib（MIT）、@pdf-lib/fontkit（MIT）、BIZ UDGothic（SIL Open Font License 1.1）
+使用しているもの: PP-OCRv5 mobile・PP-OCRv4 日本語モデル（PaddleOCR, Apache-2.0）、onnxruntime-web（MIT）、pdf-lib（MIT）、@pdf-lib/fontkit（MIT）、BIZ UDGothic（SIL Open Font License 1.1）

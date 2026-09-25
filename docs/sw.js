@@ -1,16 +1,16 @@
 // 一度読み込んだら電波がなくても使えるように、アプリのファイルを端末に保存する
-const CACHE = "yakutai-2026-09-25-1";
+const CACHE = "yakutai-2026-09-25-2";
 const FILES = [
   "./", "index.html", "css/app.css", "manifest.webmanifest",
-  "js/data.js", "js/render.js", "js/parser.js", "js/store.js", "js/ocr.js", "js/pdf.js", "js/app.js",
+  "js/data.js", "js/render.js", "js/parser.js", "js/reader.js", "js/store.js", "js/ocr.js", "js/pdf.js", "js/app.js",
   "lib/ort.wasm.min.js", "lib/ort-wasm-simd-threaded.mjs", "lib/ort-wasm-simd-threaded.wasm",
   "lib/pdf-lib.min.js", "lib/fontkit.umd.min.js",
-  "models/det.onnx", "models/rec.onnx", "models/rec_dict.txt",
+  "models/det.onnx", "models/rec.onnx", "models/rec_dict.txt", "models/recj.onnx", "models/recj_dict.txt",
   "fonts/BIZUDGothic-Bold-jis.ttf",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
 ];
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))

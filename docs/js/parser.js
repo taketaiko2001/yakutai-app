@@ -7,7 +7,7 @@
   const GAIYOU_KINDS = ["ぬり薬", "点眼薬", "点鼻薬", "点耳薬", "貼り薬", "うがい薬", "トローチ", "消毒用の薬", "坐薬"];
   const FORM_ROW = { "錠剤": "tablet", "カプセル": "capsule", "こな薬": "powder" };
   const UNIT_ROW = { t: "tablet", "錠": "tablet", c: "capsule", cap: "capsule", "カプセル": "capsule", p: "powder", "包": "powder" };
-  const UNIT_LABEL = { t: "T", "錠": "錠", c: "C", cap: "C", "カプセル": "C", p: "包", "包": "包", g: "g", "本": "本", "枚": "枚", "個": "個", ml: "mL" };
+  const UNIT_LABEL = { t: "T", "錠": "錠", c: "C", cap: "C", "カプセル": "C", p: "包", "包": "包", g: "g", "本": "本", "枚": "枚", "個": "個", ml: "mL", cc: "cc" };
 
   // ---------------------------------------------------------------- 文字の正規化
   function hiraToKata(s) {
@@ -75,14 +75,26 @@
 
   // ---------------------------------------------------------------- 1行の解析
   const RE_DATE = /(?<!\d)(\d{1,2})\s*[.,/。、]\s*(\d{1,2})\s*[.,/。、]\s*(\d{1,2})/;
-  const RE_QTY_G = /(\d+(?:\.\d+)?)\s*(カプセル|cap|ml|t|錠|c|p|包|g|本|枚|個)(?![a-z])/g;
+  const RE_QTY_G = /(\d+(?:\.\d+)?)\s*(カプセル|cap|ml|cc|t|錠|c|p|包|g|本|枚|個)(?![a-z])/g;
   const RE_USAGE = /(\d)\s*[×x+]\s*(朝昼夕|朝夕|n|朝|昼|夕|タ|9|ネル前|ネ|寝|眠|就寝|vde|v\.d\.e|zde|z\.d\.e|vds|hs|h\.s)/;
   const RE_DAYS = /(\d{1,3})\s*(?:td|t\.d|日分)/;
   const RE_DAYS_OCR = /(?<!\d)(\d{1,3})(?:70|20|7d|2d|t0|to|id|1d)(?![\da-z])/;
   const RE_TONPUKU = /頓|トンプク|prn|屯/;
   const RE_COUNT = /(\d+)\s*回分|[×x]\s*(\d+)\s*回(?!\/)/;
   const RE_TIMES_1DAY = /1日\s*(\d)\s*回/;
-  const RE_CONTAINERS = /(\d+(?:\.\d+)?)\s*(?:g|本)?\s*[×x]\s*(\d+)(?!\s*(?:回|日|td))/;  // 混合容器「3×2」= 2個
+  // 外用の回数:「夜1」「1日数回」「日2」「1日2回」
+  const RE_TIMES_ANY = /夜\s*1|1日\s*数\s*回|数回|1日\s*\d\s*回|(?<![\d.])日\s*\d(?!\d)/g;
+  function timesToken(t) {
+    const m = t.match(RE_TIMES_ANY);
+    if (!m) return "";
+    const x = m[m.length - 1];
+    if (/夜/.test(x)) return "夜1";
+    if (/数/.test(x)) return "数";
+    return x.match(/(\d)(?!.*\d)/)[1];
+  }
+  // 混合容器などの容器番号:「ロヘパ-2」「サヘパ-3×2」「サヘパー3×2」（2番=30g、3番=50g）
+  const RE_CONT_NO = /[-ー－~]\s*([1-4])(?:\s*[×x]\s*(\d{1,2}))?(?![\d.])/;
+  const RE_CONTAINERS = /(\d+(?:\.\d+)?)\s*(?:g|本)?\s*[×x]\s*(\d+)(?!\s*(?:回|日|td))/;  // 混合容器「3×2」= 3番の容器を2個
   const RE_PAREN = /[(（]\s*([^)）]*)[)）]?/;
   const RE_RP = /^\s*[^\s(（]{1,3}\)\s*/;   // 「Rp)」とそのOCR読み違い
   const RE_BULLET = /^[\s・･.\-‐ー—*]+/;
@@ -168,10 +180,15 @@
     const res = { date: { year: "", month: "", day: "" }, bags: [], ignored: [], text: "" };
     const out = [];
     const pending = [];
-    let lastGaiyou = null;
+    let lastGaiyou = null, prevGaiyou = null, pendingDefault = null;
 
     const flush = (usage, lineUnsure) => {
       if (!pending.length) return;
+      // 用法が書かれていないセット処方は、セットの決まった用法（日数は要確認）
+      if (!usage.times && !usage.tonpuku && pendingDefault && !learnedUsage(pending.map(p => p.drug.name), learn)) {
+        usage = pendingDefault; lineUnsure = ["days"];
+      }
+      pendingDefault = null;
       res.bags.push(naifukuBag(pending.splice(0), usage, lineUnsure || [], learn));
     };
 
@@ -185,6 +202,8 @@
       const learned = lookupOcrFix(line, learn, drugs);
       if (learned) { line = learned; fromLearn = true; }
 
+      let flagged = false;
+      if (/[?？]\s*$/.test(line)) { flagged = true; line = line.replace(/\s*[?？]\s*$/, ""); }
       let t = norm(line);
       if (!res.date.year) {
         const m = t.match(RE_DATE);
@@ -203,7 +222,20 @@
       let namePart = qms.length ? body.slice(0, qms[0].index) : body;
       const um = namePart.match(RE_USAGE);
       if (um) namePart = namePart.slice(0, um.index);
-      namePart = namePart.replace(RE_PAREN, "").replace(RE_CONTAINERS, "");
+      namePart = namePart.replace(RE_PAREN, "").replace(RE_CONTAINERS, "").replace(RE_CONT_NO, "");
+      const set = matchSet(namePart, ctx.sets);
+      if (set) {
+        for (const l of set.lines) {
+          const lq = qtyMatches(norm(l));
+          const [d] = matchDrug(l.replace(RE_QTY_G, ""), drugs);
+          if (d) pending.push({ drug: d, qty: lq.length ? +lq[0][1] : null, unit: lq.length ? lq[0][2] : "", unsure: flagged, line: `${set.name}（${l}）` });
+        }
+        out.push(set.name + (flagged ? " ？" : ""));
+        if (usage.times || usage.days) { flush(usage, usage.unsure); out.push(usageText(usage)); }
+        else pendingDefault = set.usage ? Object.assign(parseUsage(norm(set.usage)), { unsure: ["days"] }) : null;
+        lastGaiyou = null;
+        continue;
+      }
       let [drug, conf] = matchDrug(namePart, drugs);
 
       // マスタにない薬でも、人が入力した行なら数量の単位から内服・外用を推定して袋にする
@@ -227,11 +259,23 @@
           continue;
         }
         const pm = line.match(RE_PAREN);
-        if (pm && lastGaiyou && !lastGaiyou.site && RE_JP2.test(pm[1])) {
-          const [site, sconf] = matchSite(pm[1], sites);
+        if (pm && lastGaiyou && isDitto(pm[1])) {
+          if (prevGaiyou && mergeInto(prevGaiyou, lastGaiyou)) {
+            res.bags.splice(res.bags.indexOf(lastGaiyou), 1);
+            out[out.length - 1] += " (〃)";
+            lastGaiyou = prevGaiyou;
+          }
+          continue;
+        }
+        if (pm && lastGaiyou && (!lastGaiyou.site || lastGaiyou.uncertain.includes("site")) && RE_JP2.test(pm[1].replace(RE_TIMES_ANY, ""))) {
+          const inner = pm[1].replace(RE_TIMES_ANY, "").trim();
+          const [site, sconf] = matchSite(inner, sites);
           lastGaiyou.site = site;
+          lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "site");
           if (!sconf) lastGaiyou.uncertain.push("site");
-          out[out.length - 1] += ` (${site})`;
+          const tk = timesToken(norm(line));
+          if (tk) { lastGaiyou.times = tk; lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "times"); }
+          out[out.length - 1] += ` (${site})` + (tk ? " " + timesLabel(tk) : "");
           continue;
         }
         res.ignored.push(line);
@@ -247,7 +291,7 @@
         if (drug.type === "naifuku" && u === "g" && drug.form !== "こな薬") continue;
         qty = +qms[i][1]; unit = u; break;
       }
-      const unsure = conf < 0.85 || fromLearn;
+      const unsure = conf < 0.85 || fromLearn || flagged;
 
       if (drug.type === "naifuku") {
         pending.push({ drug, qty, unit, unsure, line: raw.trim() });
@@ -261,15 +305,21 @@
         flush({}, ["times", "days"]);
         const bag = gaiyouBag(drug, qty, unit, body, raw.trim(), ctx.gaiyouDefaultTimes || "2", sites, unsure, learn);
         if (fromLearn) bag.comment = ["過去の訂正から推測", bag.comment].filter(Boolean).join("・");
-        res.bags.push(bag);
-        lastGaiyou = bag;
-        const tail = bag._timesFromLine ? ` 1日${bag.times}回` : "";
-        const cont = bag.containers >= 2 ? ` ${fmtNum(bag.qty || 0)}×${bag.containers}` : (qty != null ? ` ${qtyText(qty, unit)}` : "");
-        out.push(`${drug.name}${cont}${tail}${bag.site ? " " + bag.site : ""}`);
+        const shortName = drug.mix ? (drug.aliases && drug.aliases[0]) || drug.name : drug.name;
+        const tail = bag._timesFromLine ? " " + timesLabel(bag.times) : "";
+        const cont = bag.containerNo ? ` -${bag.containerNo}${bag.containers >= 2 ? "×" + bag.containers : ""}` : (bag.containers >= 2 ? ` ${fmtNum(bag.qty || 0)}×${bag.containers}` : (qty != null ? ` ${qtyText(qty, unit)}` : ""));
+        if (bag._ditto && lastGaiyou && mergeInto(lastGaiyou, bag)) {
+          out.push(`${shortName}${cont} (〃)`);
+        } else {
+          prevGaiyou = lastGaiyou;
+          res.bags.push(bag);
+          lastGaiyou = bag;
+          out.push(`${shortName}${cont}${bag.site ? ` (${bag.site})` : ""}${tail}${flagged ? " ？" : ""}`);
+        }
       }
     }
     flush({}, ["times", "days"]);
-    res.bags.forEach(b => delete b._timesFromLine);
+    res.bags.forEach(b => { delete b._timesFromLine; delete b._ditto; });
     res.text = out.join("\n");
     return res;
   }
@@ -329,6 +379,7 @@
 
   function gaiyouBag(drug, qty, unit, body, line, defaultTimes, sites, unsure, learn) {
     const bag = emptyBag("gaiyou");
+    bag.containerNo = 0;
     bag.drug_names = [drug.name];
     bag.source = line;
     bag.kind = GAIYOU_KINDS.includes(drug.form) ? drug.form : "ぬり薬";
@@ -338,11 +389,17 @@
     if (unsure) notes.push("薬品名の読み取りに自信がありません");
     if (drug.unknown) { bag.unknown_drug = drug.name; notes.push("薬品マスタにない薬です"); }
 
-    const cm = body.match(RE_CONTAINERS);
-    if (cm) { bag.qty = +cm[1]; bag.containers = +cm[2]; }
-    bag.drugs = [`${drug.name} ${bag.containers >= 2 ? fmtNum(bag.qty) + "×" + bag.containers : qtyText(qty, unit)}`.trim()];
+    const cn = body.match(RE_CONT_NO);
+    const cm = cn ? null : body.match(RE_CONTAINERS);
+    if (cn) { bag.containerNo = +cn[1]; bag.containers = cn[2] ? +cn[2] : 1; }
+    else if (cm && drug.mix) { bag.containerNo = +cm[1]; bag.containers = +cm[2]; }
+    else if (cm) { bag.qty = +cm[1]; bag.containers = +cm[2]; }
+    else if (drug.mix) { bag.containers = 1; uns.add("containers"); notes.push("容器の番号（-2・-3 など）が読めません"); }
+    const contText = bag.containerNo ? `${bag.containerNo}番×${bag.containers}` : bag.containers >= 2 ? fmtNum(bag.qty) + "×" + bag.containers : qtyText(qty, unit);
+    bag.drugs = [`${drug.name} ${contText}`.trim()];
 
-    const m = body.match(RE_TIMES_1DAY) || body.match(RE_USAGE);
+    const tk = timesToken(body);
+    const m = tk ? [null, tk] : body.match(RE_USAGE);
     if (m) { bag.times = m[1]; bag._timesFromLine = true; }
     else if (drug.times) bag.times = String(drug.times);
     else {
@@ -357,15 +414,16 @@
     else {
       const qms = qtyMatches(body);
       let after = qms.length ? body.slice(qms[qms.length - 1].index + qms[qms.length - 1][0].length) : "";
-      if (cm) after = body.slice(body.indexOf(cm[0]) + cm[0].length);
-      siteText = after.replace(RE_TIMES_1DAY, "").replace(RE_USAGE, "");
+      if (cn || cm) after = body.slice(body.indexOf((cn || cm)[0]) + (cn || cm)[0].length);
+      siteText = after.replace(RE_USAGE, "");
     }
-    siteText = siteText.replace(/^[\s　・]+|[\s　・]+$/g, "");
+    siteText = siteText.replace(RE_TIMES_ANY, "").replace(/^[\s　・]+|[\s　・]+$/g, "");
+    if (isDitto(siteText)) { bag._ditto = true; siteText = ""; }
     if (siteText) {
       const [site, sconf] = matchSite(siteText, sites);
       bag.site = site;
       if (!sconf) uns.add("site");
-    } else {
+    } else if (!bag._ditto) {
       const lu = learnedGaiyou(drug.name, learn);
       if (lu && lu.site) { bag.site = lu.site; uns.add("site"); notes.push("部位の記載なし → よく使う部位"); }
     }
@@ -373,6 +431,31 @@
     bag.uncertain = [...uns].sort();
     bag.comment = notes.join("・");
     return bag;
+  }
+
+  function isDitto(s) { return /^\s*[〃々"″]+\s*$/.test(String(s || "")) || /^\s*同上\s*$/.test(String(s || "")); }
+  function timesLabel(tk) { return tk === "夜1" ? "夜1" : tk === "数" ? "1日数回" : `1日${tk}回`; }
+  // 同じ部位（〃）の薬を1つの袋にまとめる
+  function mergeInto(a, b) {
+    if (!a || !b || a.type !== "gaiyou" || b.type !== "gaiyou") return false;
+    a.drug_names.push(...b.drug_names);
+    a.drugs.push(...b.drugs);
+    a.source += " / " + b.source;
+    if (a.unit && a.unit === b.unit && a.qty != null && b.qty != null) a.qty += b.qty;
+    else if (b.qty != null && a.qty == null) { a.qty = b.qty; a.unit = b.unit; }
+    a.containers = Math.max(a.containers || 0, b.containers || 0);
+    if ((b.containerNo || 0) > (a.containerNo || 0)) a.containerNo = b.containerNo;
+    a.uncertain = [...new Set([...a.uncertain, ...b.uncertain.filter(x => x !== "site")])].sort();
+    a.comment = [...new Set([a.comment, b.comment, "同じ部位（〃）の薬をまとめました"].filter(Boolean))].join("・");
+    return true;
+  }
+  function matchSet(text, sets) {
+    const q = fuzzkey(text);
+    if (q.length < 2) return null;
+    for (const s of sets || []) {
+      for (const a of [s.name, ...(s.aliases || [])]) if (similarity(q, fuzzkey(a)) >= 0.85) return s;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------- 学習データの参照
@@ -388,6 +471,7 @@
       if (s > score) { score = s; best = v; }
     }
     if (best && score >= 0.85) {
+      if (!drugs) return best.to;
       const [d] = matchDrug(line.replace(RE_PAREN, ""), drugs);
       if (!d) return best.to;
     }
@@ -414,9 +498,12 @@
       lines.push(usageText({ times: b.times, timing: b.timing, meal: b.meal, days: b.days, tonpuku: b.tonpuku, count: b.tonpuku_count, when: b.tonpuku_when }));
       return lines.join("\n");
     }
-    const name = (b.drugs && b.drugs[0]) || "";
-    return `${name} 1日${b.times}回${b.site ? " " + b.site : ""}`.trim();
+    return (b.drugs || []).map((name, i) => {
+      name = name.replace(/ (\d)番×(\d+)$/, (m, a, c) => ` -${a}${+c > 1 ? "×" + c : ""}`);
+      if (i > 0) return `${name} (〃)`;
+      return `${name} ${timesLabel(b.times)}${b.site ? " (" + b.site + ")" : ""}`.trim();
+    }).join("\n");
   }
 
-  global.KarteParser = { parse, norm, fuzzkey, similarity, matchDrug, prepareDrugs, prepareSites, bagToText, usageText, GAIYOU_KINDS };
+  global.KarteParser = { parse, timesLabel, lookupOcrFix, norm, fuzzkey, similarity, matchDrug, prepareDrugs, prepareSites, bagToText, usageText, GAIYOU_KINDS };
 })(typeof window !== "undefined" ? window : globalThis);
