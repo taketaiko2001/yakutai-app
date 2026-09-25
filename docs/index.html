@@ -33,11 +33,13 @@
     </div>
     <p class="note" id="photoNote">処方欄が大きく、明るく、真上から写るように撮ってください。読み取りはこの端末の中だけで行います（外部に送信しません）。</p>
     <div class="photo" id="photoBox" hidden>
-      <img id="photo" alt="カルテ写真">
+      <div class="photo-wrap" id="photoWrap"><img id="photo" alt="カルテ写真"><div class="sel" id="photoSel" hidden></div></div>
       <div class="photo-tools">
+        <button class="btn tiny primary" id="btnSelect">範囲を囲んで読み直す</button>
         <button class="btn tiny" id="btnZoom">大きく見る</button>
         <button class="btn tiny" id="btnReread">もう一度読み取る</button>
       </div>
+      <p class="note" id="selNote" hidden>写真の上を指でなぞって、<b>今回の処方の部分</b>（日付から最後の薬まで）を四角く囲んでください。囲んだ部分だけを大きく読み取ります。</p>
     </div>
     <p class="status" id="ocrStatus" hidden></p>
   </section>

@@ -7,12 +7,13 @@
   // 手書きで区別しにくい文字のグループ（同じグループの文字は同じとみなして照合する）
   const GROUPS = ["ヘへ", "ベべ", "ペぺ", "ー一-－—ｰ~〜_", "ロ口□", "カ力か", "ニ二", "エ工", "タ夕", "ト卜", "ハ八", "リりソ", "ミ三",
     "l1Iі|丨", "o0O。°", "ソン", "ツシ", "ナ十", "チ千", "オ才", "ホ木", "ム△", "cC", "n几", "T丁", "オォ", "ツッ", "ユュ", "ヤャ", "ヨョ",
-    "イィ", "アァ", "エェ", "ウゥ", "クグ", "ミシ", "ラう", "×xX", "Nn", "Zz2", "Pp"];
+    "イィ", "アァ", "エェ", "ウゥ", "クグ", "ミシ", "ラう", "×xX", "Nn", "Zz", "Pp",
+    "ハバパ", "ヒビピ", "フブプ", "ヘベペ", "ホボポ", "カガ", "キギ", "ケゲ", "コゴ", "サザ", "シジ", "スズ", "セゼ", "ソゾ", "タダ", "チヂ", "ツヅ", "テデ", "トド"];
   const DAYS_COMMON = [3, 4, 5, 7, 10, 14, 21, 28, 30, 35, 42, 56, 60, 84, 90];
   // 行の中の「回数」の書き方（カルテ → 印字）
   const TIMES_TOKENS = [["夜1", "夜1"], ["日1", "1"], ["日2", "2"], ["日3", "3"], ["数回", "数"]];
 
-  const P = { bonus: 1.0, common: 1.0, drugMin: -1.0, drugSure: 1.5, siteMin: 1.0, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
+  const P = { bonus: 1.0, common: 1.0, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
 
   function kata(s) {
     return String(s || "").normalize("NFKC").replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
@@ -46,10 +47,10 @@
       for (const k of useKeys) drugs.push({ key: k, emit, drug: d, prior: prior(d) });
     }
     for (const s of data.sets || []) {
-      const d = { name: s.name, type: "naifuku", set: true, common: true };
+      const d = { name: s.name, type: "naifuku", set: true };
       for (const w of new Set([s.name, ...(s.aliases || [])])) {
         const k = keyOf(w);
-        if (k.length >= 2) drugs.push({ key: k, emit: s.name, drug: d, prior: prior(d) });
+        if (k.length >= 4) drugs.push({ key: k, emit: s.name, drug: d, prior: prior(d) });   // 短い書き方は他の行に当てはまりやすいので使わない
       }
     }
     const variants = (global.KarteParser && global.KarteParser.siteVariants) || (w => [w]);
@@ -62,11 +63,52 @@
     const times = TIMES_TOKENS.map(([w, emit]) => ({ key: w, emit }));
     return { drugs, sites, times };
   }
-  // 認識モデルの出力から残しておく文字（辞書の照合と数量・用法の読み取りに使うもの）
+  // ---------------------------------------------------------------- カタカナ優先の読み取り
+  // カルテはカタカナで書かれることが多いので、読み取りの文字を「カタカナ・数字・カルテで使う記号と一部の漢字」に絞る。
+  // ひらがなや形の似た漢字として読まれたものは、カタカナとして数える（例: う→ウ、口→ロ、力→カ）。
+  const KATAKANA = (() => { let t = ""; for (let c = 0x30A1; c <= 0x30F6; c++) t += String.fromCharCode(c); return t + "ー"; })();
+  const OUT_OTHER = "0123456789lorncgmpsTDNPZAGMVS()×.-/〃・本夜日回数錠包朝昼前後分顔体首手足虫頭全身保湿下肢指爪裏汗止刺悪所痒塩酪";
+  const FOLD = { "口": "ロ", "□": "ロ", "力": "カ", "工": "エ", "夕": "タ", "卜": "ト", "八": "ハ", "二": "ニ", "三": "ミ", "千": "チ",
+    "才": "オ", "一": "ー", "〜": "ー", "~": "ー", "—": "ー", "－": "-", "十": "ナ", "木": "ホ", "年": "本", "平": "本", "未": "本",
+    "x": "×", "X": "×", "（": "(", "）": ")", "O": "o", "L": "l", "I": "l", "|": "l", "丁": "T", "〻": "〃", "々": "〃", "″": "〃", "\"": "〃" };
+  // 出力する文字ごとに、それとみなす元の文字の一覧
+  const OUT_MAP = (() => {
+    const m = new Map();
+    const add = (out, src) => { if (!m.has(out)) m.set(out, new Set([out])); m.get(out).add(src); };
+    for (const c of KATAKANA) add(c, c);
+    for (let c = 0x3041; c <= 0x3096; c++) add(String.fromCharCode(c + 0x60), String.fromCharCode(c));   // ひらがな → カタカナ
+    for (const c of OUT_OTHER) add(c, c);
+    for (const [src, out] of Object.entries(FOLD)) add(out, src);
+    return [...m.entries()].map(([out, set]) => [out, [...set]]);
+  })();
+  // 認識モデルの出力から残しておく文字（辞書の照合・数量や用法の読み取り・カタカナ優先の読み取りに使うもの）
   function keepChars(lex) {
     const set = new Set("0123456789×xXTDNnタ夕朝昼ネル前本錠包()（）-ー.,cgmlo夜日数回〃々");
     for (const e of [...lex.drugs, ...lex.sites, ...lex.times]) for (const c of e.key) for (const x of eqChars(c)) set.add(x);
+    for (const [, srcs] of OUT_MAP) for (const c of srcs) set.add(c);
     return [...set].join("");
+  }
+  // m（1行分）をカタカナ優先で読む → [{t, ch}]
+  function decodeKana(m) {
+    const outs = [];
+    for (const [out, srcs] of OUT_MAP) {
+      const cols = srcs.map(c => m.cols.get(c)).filter(x => x != null);
+      if (cols.length) outs.push([out, cols]);
+    }
+    const seq = [];
+    let last = null;
+    for (let t = 0; t < m.T; t++) {
+      const off = t * m.K;
+      let best = null, bv = m.seq ? -Infinity : m.blank[t];
+      for (const [out, cols] of outs) {
+        let v = -Infinity;
+        for (const c of cols) if (m.lp[off + c] > v) v = m.lp[off + c];
+        if (v > bv) { bv = v; best = out; }
+      }
+      if (best && (m.seq || best !== last)) seq.push({ t, ch: best });
+      last = best;
+    }
+    return seq;
   }
 
   // ---------------------------------------------------------------- 単語さがし（CTC）
@@ -107,25 +149,73 @@
     }
     return { pen: best, span };
   }
-  // 2つのモデルのうち良いほうで、辞書の中から当てはまる語を良い順に k 個（印字する名前が同じものは1つにまとめる）
-  function rankOf(row, entries, range, k) {
+  // 1文字ずつ順に出すモデル（NDLOCR-Lite の PARSeq）用の単語さがし。
+  // 各位置の「その文字らしさ」で置き換えの減点を決め、文字の抜け・余分な文字も少しの減点で許す（行のどこか一部分に当てはめる）
+  const SEQ = { ins: 2.5, del: 2.5, subMax: 6 };
+  function spotSeq(m, word, from, to) {
+    from = from || 0; to = to == null ? m.T : to;
+    const L = word.length;
+    const lab = [];
+    for (const c of word) {
+      const cols = eqChars(c).map(x => m.cols.get(x)).filter(x => x != null);
+      if (!cols.length) return null;
+      lab.push(cols);
+    }
+    let prev = new Float64Array(L + 1), cur = new Float64Array(L + 1);
+    let ps = new Int32Array(L + 1), cs = new Int32Array(L + 1);
+    for (let j = 1; j <= L; j++) { prev[j] = j * SEQ.del; ps[j] = from; }
+    let best = Infinity, span = [from, from];
+    for (let i = from; i < to; i++) {
+      const off = i * m.K, mx = m.max[i];
+      cur[0] = 0; cs[0] = i + 1;
+      for (let j = 1; j <= L; j++) {
+        let v = -Infinity;
+        for (const c of lab[j - 1]) if (m.lp[off + c] > v) v = m.lp[off + c];
+        const sub = Math.min(SEQ.subMax, mx - v);
+        let cost = prev[j - 1] + sub, st = j === 1 ? i : ps[j - 1];
+        if (cur[j - 1] + SEQ.del < cost) { cost = cur[j - 1] + SEQ.del; st = cs[j - 1]; }
+        if (j < L && prev[j] + SEQ.ins < cost) { cost = prev[j] + SEQ.ins; st = ps[j]; }
+        cur[j] = cost; cs[j] = st;
+      }
+      if (cur[L] < best) { best = cur[L]; span = [cs[L], i]; }
+      [prev, cur] = [cur, prev]; [ps, cs] = [cs, ps];
+    }
+    return best === Infinity ? null : { pen: -best, span };
+  }
+
+  // 3つのモデル（A=汎用 v5・J=日本語 v4 は CTC、B=NDLOCR-Lite は1文字ずつ）の点数を合わせて、
+  // 辞書の中から当てはまる語を良い順に k 個（印字する名前が同じものは1つにまとめる）。
+  // w: モデルの種類ごとの重み。薬は両方を足し、部位・回数は手書きに強い B だけで見る
+  const W_DRUG = { ctc: 1, seq: 1 }, W_SITE = { ctc: 0, seq: 1 };
+  const FLOOR = -5;
+  function rankOf(row, entries, range, k, w) {
+    w = w || W_DRUG;
+    if (!row.B) w = { ctc: 1, seq: 0 };                  // B がない（読み取れなかった）ときは CTC だけで
     const best = new Map();
     for (const e of entries) {
-      for (const which of ["A", "B"]) {
+      let ctc = null, seq = null, pen = -Infinity;
+      const spans = {};
+      for (const which of ["A", "J", "B"]) {
         const m = row[which];
         if (!m) continue;
+        if ((m.seq ? w.seq : w.ctc) === 0) continue;
         const r = range ? range[which] : null;
         if (range && !r) continue;
-        const sp = spot(m, e.key, r ? r[0] : 0, r ? r[1] : m.T);
+        const sp = (m.seq ? spotSeq : spot)(m, e.key, r ? r[0] : 0, r ? r[1] : m.T);
         if (!sp) continue;
-        const score = sp.pen + P.bonus * e.key.length + (e.prior || 0);
-        const cur = best.get(e.emit);
-        if (!cur || score > cur.score) best.set(e.emit, { score, pen: sp.pen, e, which, span: sp.span });
+        const sc = sp.pen + P.bonus * e.key.length;
+        spans[which] = sp.span;
+        if (sp.pen > pen) pen = sp.pen;
+        if (m.seq) seq = seq == null ? sc : Math.max(seq, sc); else ctc = ctc == null ? sc : Math.max(ctc, sc);
       }
+      if (ctc == null && seq == null) continue;
+      const score = w.ctc * (ctc == null ? FLOOR : ctc) + w.seq * (seq == null ? FLOOR : seq) + (e.prior || 0);
+      const cur = best.get(e.emit);
+      if (!cur || score > cur.score) best.set(e.emit, { score, pen, e, spans, wsum: w.ctc + w.seq });
     }
     return [...best.values()].sort((a, b) => b.score - a.score).slice(0, k || 5);
   }
-  function bestOf(row, entries, range) { return rankOf(row, entries, range, 1)[0] || null; }
+  function bestOf(row, entries, range, w) { return rankOf(row, entries, range, 1, w)[0] || null; }
 
   // ---------------------------------------------------------------- 行の組み立て
   function norm(s) { return String(s || "").normalize("NFKC"); }
@@ -184,7 +274,9 @@
   }
 
   // 行の頭の「Rp)」とその読み違い（{P) =P) 2P) など）・箇条書きの点を除く
-  function stripHead(t) { return norm(t).trim().replace(/^[^\s(（]{1,3}\)[\s.。、・]*/, "").replace(/^[\s・.\-ー—]+/, ""); }
+  function stripHead(t) {
+    return norm(t).trim().replace(/^[(（]?[RrＲ尺2{}=]?[PpＰ][)）][\s.。、・]*/, "").replace(/^[^\s(（]{1,3}\)[\s.。、・]*/, "").replace(/^[\s・.\-ー—]+/, "");
+  }
   function startsParen(row) {
     return /^[(（Cc<{[]/.test(stripHead(row.ta)) || /^[(（]/.test(stripHead(row.tb));
   }
@@ -194,28 +286,25 @@
   // 候補の薬 cand で、この行を「カルテの書き方の1行」にする
   function composeDrug(row, cand, lex, usage) {
     const d = cand.e.drug;
-    const tailA = tailText(row.A, cand.which === "A" ? cand.span[1] : -1);
-    const tailB = tailText(row.B, cand.which === "B" ? cand.span[1] : -1);
+    const tails = ["B", "A", "J"].filter(w => row[w]).map(w => tailText(row[w], cand.spans[w] ? cand.spans[w][1] : -1));
     const type = d.type === "gaiyou" ? "gaiyou" : "naifuku";
-    let q = d.set ? null : readQty([tailA, tailB], type);
+    let q = d.set ? null : readQty(tails, type);
     let guessed = false;
     if (!q && type === "naifuku" && d.dose) { q = { text: d.dose }; guessed = true; }
     const parts = [cand.e.emit];
     if (q) parts.push(q.text);
     if (type === "gaiyou") {
       const range = {};
-      range[cand.which] = [cand.span[1] + 1, row[cand.which].T];
-      const other = cand.which === "A" ? "B" : "A";
-      if (row[other]) range[other] = [0, row[other].T];
-      const site = bestOf(row, lex.sites, range);
+      for (const w of ["A", "J", "B"]) if (row[w]) range[w] = [cand.spans[w] ? cand.spans[w][1] + 1 : 0, row[w].T];
+      const site = bestOf(row, lex.sites, range, W_SITE);
       if (site && site.score >= P.siteMin) parts.push(`(${site.e.emit})`);
-      const tm = bestOf(row, lex.times, range);
+      const tm = bestOf(row, lex.times, range, W_SITE);
       if (tm && tm.pen > -P.tokenMin * 3) parts.push(timesText(tm));
     } else if (usage.times || usage.days) {
       if (usage.times) parts.push(`${usage.times}×${usage.code}`);
       if (usage.days) parts.push(`${usage.days}TD`);
     }
-    const unsure = cand.score < P.drugSure || guessed;
+    const unsure = cand.score < P.drugSure * cand.wsum || guessed;
     return parts.join(" ") + (unsure ? " ？" : "");
   }
 
@@ -235,19 +324,19 @@
       const usage = readUsage(ta);
       let drugs = paren ? [] : rankOf(row, lex.drugs, null, 5);
       if (!paren && drugs.length && /[(（]/.test(ta + tb)) {
-        const st = bestOf(row, lex.sites);
-        if (st && st.score > drugs[0].score) { paren = true; drugs = []; }
+        const st = bestOf(row, lex.sites, null, W_SITE);
+        if (st && st.score * drugs[0].wsum > drugs[0].score) { paren = true; drugs = []; }
       }
       const drugAlts = drugs.map(c => ({ label: c.e.emit, text: composeDrug(row, c, lex, usage) }));
-      if (drugs.length && drugs[0].score >= P.drugMin) {
+      if (drugs.length && drugs[0].score >= P.drugMin * drugs[0].wsum) {
         return { kind: "drug", text: drugAlts[0].text, alts: drugAlts, row };
       }
       if (usage.times) {
         return { kind: "usage", text: `${usage.times}×${usage.code}` + (usage.days ? ` ${usage.days}TD` : ""), alts: drugAlts, row };
       }
       if (paren || /[(（]/.test(ta + tb)) {
-        const sites = rankOf(row, lex.sites, null, 5);
-        const tm = bestOf(row, lex.times);
+        const sites = rankOf(row, lex.sites, null, 5, W_SITE);
+        const tm = bestOf(row, lex.times, null, W_SITE);
         const tmText = tm && tm.pen > -P.tokenMin * 3 ? " " + timesText(tm) : "";
         const siteAlts = [{ label: "〃（上と同じ）", text: "(〃)" }, ...sites.map(c => ({ label: c.e.emit, text: `(${c.e.emit})${tmText}` }))];
         const inner = t => (norm(t).match(/[(（]([^)）]*)/) || [, "xxx"])[1].replace(/\s/g, "");
@@ -278,7 +367,9 @@
       off += m.T;
     }
     const cols = new Map(chars.map((c, i) => [c, i]));
-    return { T, K, cols, lp, blank, max, chars: seq };
+    const m = { T, K, cols, lp, blank, max, chars: seq, seq: list[0].kind === "seq" };
+    m.chars = decodeKana(m);   // 表示・数量の読み取りには、カタカナ優先で読んだ文字を使う
+    return m;
   }
   function makeRows(items) {
     items = items.slice().sort((a, b) => (a.top + a.bottom) - (b.top + b.bottom));
@@ -291,11 +382,21 @@
     rows.sort((a, b) => (a.top + a.bottom) - (b.top + b.bottom));
     return rows.map(r => {
       r.items.sort((a, b) => a.x - b.x);
-      const text = w => r.items.map(i => i[w].seq.map(c => c.ch).join("")).join(" ").trim();
-      return { ta: text("A"), tb: text("B"), A: unpack(r.items.map(i => i.A)), B: unpack(r.items.map(i => i.B)),
+      const A = unpack(r.items.map(i => i.A)), B = unpack(r.items.map(i => i.B));
+      // 文字の塊（検出した枠）の切れ目に空白を入れて1行の文字列にする
+      const text = (m, list) => {
+        if (!m) return "";
+        const ends = []; let off = 0;
+        for (const it of list) { off += it.T; ends.push(off); }
+        let s = "", k = 0;
+        for (const c of m.chars) { while (k < ends.length - 1 && c.t >= ends[k]) { if (s && !s.endsWith(" ")) s += " "; k++; } s += c.ch; }
+        return s.trim();
+      };
+      const J = r.items[0].J ? unpack(r.items.map(i => i.J)) : null;
+      return { ta: text(A, r.items.map(i => i.A)), tb: B && B.T ? text(B, r.items.map(i => i.B)) : (J ? text(J, r.items.map(i => i.J)) : ""), A, B: B && B.T ? B : null, J,
         box: { x: Math.min(...r.items.map(i => i.x)), x2: Math.max(...r.items.map(i => i.x2 != null ? i.x2 : i.x)), top: r.top, bottom: r.bottom } };
     });
   }
 
-  global.KarteReader = { buildLexicon, keepChars, spot, read, keyOf, makeRows, bestOf, rankOf, P };
+  global.KarteReader = { buildLexicon, keepChars, spot, spotSeq, read, keyOf, makeRows, bestOf, rankOf, P };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-25c";
+const APP_VERSION = "2026-09-25e";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -12,6 +12,7 @@ const S = {
   bags: [], common: { name: "", year: "", month: "", day: "" },
   photo: null, photoUrl: "", ocrInitial: "", pdfs: [],
   readLines: [],   // 読み取った行（写真の切り抜き・選び直し候補つき）
+  rect: null,      // 読み取る範囲（写真の画素。null なら全体）
 };
 
 // ---------------------------------------------------------------- 共通
@@ -55,6 +56,7 @@ async function setPhoto(fileOrBlob) {
   if (S.photoUrl) URL.revokeObjectURL(S.photoUrl);
   S.photoUrl = URL.createObjectURL(fileOrBlob);
   $("#photo").src = S.photoUrl;
+  S.rect = null; $("#photoSel").hidden = true; endSelect();
   $("#photoBig").src = S.photoUrl;
   $("#photoBox").hidden = false;
   await readPhoto();
@@ -67,7 +69,7 @@ async function readPhoto() {
     const d = Store.data;
     const lex = KarteReader.buildLexicon(d, d.learn);
     const t0 = performance.now();
-    const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), KarteReader.keepChars(lex));
+    const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), KarteReader.keepChars(lex), S.rect);
     const rows = KarteReader.makeRows(items);
     const lines = KarteReader.read(rows, lex);
     applyOcrFix(lines);
@@ -82,13 +84,43 @@ async function readPhoto() {
     st.hidden = false;
     st.className = "status" + (unsure ? " warn" : "");
     st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分）。` +
-      (unsure ? `自信のない行が ${unsure} 行あります。下の「読み取った行」で写真と見比べ、違っていれば候補をタップしてください。` : "写真と見比べて確認してください。");
+      (unsure ? `自信のない行が ${unsure} 行あります。下の「読み取った行」で写真と見比べ、違っていれば候補をタップしてください。` : "写真と見比べて確認してください。") +
+      (S.rect ? "" : "（「範囲を囲んで読み直す」で今回の処方の部分だけを囲むと、精度が上がることがあります）");
   } catch (e) {
     st.hidden = false; st.className = "status warn";
     st.textContent = "読み取りできませんでした: " + e.message + "（②に手で入力しても使えます）";
   } finally { busy(false); }
 }
 
+// 写真の上を指でなぞって、読み取る範囲を囲む
+let selStart = null;
+function startSelect() {
+  $("#photoWrap").classList.add("selecting"); $("#selNote").hidden = false;
+  $("#photoWrap").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function endSelect() { $("#photoWrap").classList.remove("selecting"); $("#selNote").hidden = true; selStart = null; }
+function bindSelect() {
+  const wrap = $("#photoWrap"), sel = $("#photoSel");
+  const pos = e => { const r = $("#photo").getBoundingClientRect(); return { x: Math.min(Math.max(e.clientX - r.left, 0), r.width), y: Math.min(Math.max(e.clientY - r.top, 0), r.height) }; };
+  const draw = (a, b) => {
+    Object.assign(sel.style, { left: Math.min(a.x, b.x) + "px", top: Math.min(a.y, b.y) + "px", width: Math.abs(a.x - b.x) + "px", height: Math.abs(a.y - b.y) + "px" });
+    sel.hidden = false;
+  };
+  wrap.addEventListener("pointerdown", e => {
+    if (!wrap.classList.contains("selecting")) return;
+    e.preventDefault(); selStart = pos(e); wrap.setPointerCapture(e.pointerId); draw(selStart, selStart);
+  });
+  wrap.addEventListener("pointermove", e => { if (selStart) draw(selStart, pos(e)); });
+  wrap.addEventListener("pointerup", e => {
+    if (!selStart) return;
+    const a = selStart, b = pos(e), img = $("#photo");
+    endSelect();
+    if (Math.abs(a.x - b.x) < 20 || Math.abs(a.y - b.y) < 20) { sel.hidden = true; toast("囲む範囲が小さすぎます。もう一度なぞってください。"); return; }
+    const k = S.photo.width / img.clientWidth;
+    S.rect = { x: Math.round(Math.min(a.x, b.x) * k), y: Math.round(Math.min(a.y, b.y) * k), w: Math.round(Math.abs(a.x - b.x) * k), h: Math.round(Math.abs(a.y - b.y) * k) };
+    readPhoto();
+  });
+}
 function rowRaw(row) { return row ? [row.ta, row.tb].join(" | ") : ""; }
 // 読み取った行の部分を写真から切り抜く（確認用の小さな画像）
 function cropRow(canvas, box) {
@@ -385,7 +417,7 @@ function openPdf(i) {
 }
 function clearAll() {
   if (!confirm("次の患者に進みます。入力内容と写真を消しますか？")) return;
-  S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = []; S.readLines = [];
+  S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = []; S.readLines = []; S.rect = null;
   renderReadRows();
   S.common = Object.assign({ name: "" }, today());
   $("#karteText").value = ""; $("#photoBox").hidden = true; $("#ocrStatus").hidden = true;
@@ -425,7 +457,7 @@ function renderMenu() {
   $("#sGaiyouTimes").value = st.gaiyouDefaultTimes; $("#sYear").value = st.yearFormat;
   const L = d.learn;
   $("#learnInfo").textContent = `これまでに ${L.count || 0} 回分を学習（よく使う処方 ${Object.keys(L.presets).length} 件、読み違いの訂正 ${Object.keys(L.ocrFix).length} 件、袋サイズのルール ${d.rules.length} 件）`;
-  $("#versionInfo").textContent = `バージョン ${APP_VERSION}`;
+  $("#versionInfo").innerHTML = `バージョン ${APP_VERSION}<br>文字認識: PaddleOCR（PP-OCRv5・PP-OCRv4 日本語、Apache-2.0）、NDLOCR-Lite（国立国会図書館、CC BY 4.0）`;
 }
 function renderDrugTable() {
   const q = KarteParser.fuzzkey($("#drugFilter").value || "");
@@ -557,6 +589,8 @@ function init() {
   $("#fileInput").onchange = e => setPhoto(e.target.files[0]);
   $("#btnZoom").onclick = () => $("#dlgPhoto").showModal();
   $("#btnReread").onclick = readPhoto;
+  $("#btnSelect").onclick = startSelect;
+  bindSelect();
 
   const ta = $("#karteText");
   ["keyup", "click", "input", "blur"].forEach(ev => ta.addEventListener(ev, () => { ta.dataset.caret = ta.selectionStart; }));

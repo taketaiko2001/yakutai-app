@@ -7,4 +7,4 @@
 - 手書きの読み取りは、院内の薬・部位の一覧と照らし合わせて最も当てはまるものを選びます。読み取った行ごとに写真の切り抜きと候補が出るので、違っていればタップで選び直せます
 - 学習した内容（よく使う処方・よく使う薬・読み違いの訂正・袋サイズのルール）は端末の中に保存されます
 
-使用しているもの: PP-OCRv5 mobile・PP-OCRv4 日本語モデル（PaddleOCR, Apache-2.0）、onnxruntime-web（MIT）、pdf-lib（MIT）、@pdf-lib/fontkit（MIT）、BIZ UDGothic（SIL Open Font License 1.1）
+使用しているもの: PP-OCRv5 mobile・PP-OCRv4 日本語モデル（PaddleOCR, Apache-2.0）、NDLOCR-Lite の文字認識モデル PARSeq（国立国会図書館, CC BY 4.0, https://github.com/ndl-lab/ndlocr-lite ）、onnxruntime-web（MIT）、pdf-lib（MIT）、@pdf-lib/fontkit（MIT）、BIZ UDGothic（SIL Open Font License 1.1）

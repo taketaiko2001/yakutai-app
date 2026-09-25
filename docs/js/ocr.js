@@ -1,10 +1,13 @@
 // 端末の中だけで動く文字認識。外部には何も送信しない。
 //  文字の場所さがし: PP-OCRv5 mobile det
-//  文字の読み取り: PP-OCRv5 mobile rec（数字・英字・印字に強い）と PP-OCRv4 日本語 rec（手書きのカタカナに強い）の2つ
+//  文字の読み取り（3つ）:
+//    A: PP-OCRv5 mobile rec（数字・英字・印字に強い）
+//    J: PP-OCRv4 日本語 rec（カタカナ）
+//    B: NDLOCR-Lite の PARSeq（国立国会図書館、CC BY 4.0。手書きを含めて学習したもの）
 // 読み取った各位置の「どの文字らしいか」の確率を残し、reader.js が薬の名前の一覧と照らし合わせる。
 (function (global) {
   "use strict";
-  let det = null, recA = null, recB = null, dictA = null, dictB = null, loading = null;
+  let det = null, recA = null, recJ = null, recN = null, dictA = null, dictJ = null, dictN = null, loading = null;
   const BASE = global.YAKUTAI_BASE || "";   // アプリのファイル置き場（テスト時だけ変える）
 
   async function init(onProgress) {
@@ -16,30 +19,34 @@
       ort.env.wasm.wasmPaths = new URL(BASE + "lib/", location.href).href;
       onProgress && onProgress("文字認識の準備中…（初回のみ少し時間がかかります）");
       const opt = { executionProviders: ["wasm"], graphOptimizationLevel: "all" };
-      const [d, a, b, ta, tb] = await Promise.all([
+      const [d, a, j, n, ta, tj, tn] = await Promise.all([
         ort.InferenceSession.create(BASE + "models/det.onnx", opt),
         ort.InferenceSession.create(BASE + "models/rec.onnx", opt),
         ort.InferenceSession.create(BASE + "models/recj.onnx", opt),
+        ort.InferenceSession.create(BASE + "models/ndl.onnx", opt),
         fetch(BASE + "models/rec_dict.txt").then(x => x.text()),
         fetch(BASE + "models/recj_dict.txt").then(x => x.text()),
+        fetch(BASE + "models/ndl_chars.json").then(x => x.json()),
       ]);
-      det = d; recA = a; recB = b;
+      det = d; recA = a; recJ = j; recN = n;
       dictA = ["", ...ta.split("\n"), " "];   // 0 = blank、末尾 = 空白
-      dictB = ["", ...tb.split("\n"), " "];
+      dictJ = ["", ...tj.split("\n"), " "];
+      dictN = ["", ...tn];                     // 0 = 終わりの印
     })();
     try { await loading; } finally { loading = null; }
   }
 
-  // 画像を、長辺が収まるキャンバスへ描く（向き補正済みの ImageBitmap か HTMLImageElement）
-  function toCanvas(img, maxSide, minLong) {
-    const w0 = img.width, h0 = img.height;
-    let s = Math.min(1, maxSide / Math.max(w0, h0));
-    if (Math.max(w0, h0) < minLong) s = minLong / Math.max(w0, h0);
+  // 画像（の rect の範囲）を、長辺が収まるキャンバスへ描く（向き補正済みの ImageBitmap か HTMLImageElement）
+  function toCanvas(img, maxSide, minLong, rect) {
+    const r = rect || { x: 0, y: 0, w: img.width, h: img.height };
+    let s = Math.min(1, maxSide / Math.max(r.w, r.h));
+    if (Math.max(r.w, r.h) < minLong) s = minLong / Math.max(r.w, r.h);
     const cv = document.createElement("canvas");
-    cv.width = Math.round(w0 * s); cv.height = Math.round(h0 * s);
+    cv.width = Math.round(r.w * s); cv.height = Math.round(r.h * s);
     const ctx = cv.getContext("2d", { willReadFrequently: true });
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
     return cv;
   }
 
@@ -55,10 +62,10 @@
   }
 
   async function detect(src) {
-    // 32の倍数にそろえる（短辺が736未満なら拡大）
-    let s = 1;
+    // 文字の場所さがしは長辺1600程度で行い（速さとメモリのため）、32の倍数にそろえる（短辺が736未満なら拡大）
     const minSide = Math.min(src.width, src.height);
-    if (minSide < 736) s = 736 / minSide;
+    let s = Math.min(1, 1600 / Math.max(src.width, src.height));
+    if (minSide * s < 736) s = 736 / minSide;
     const W = Math.max(32, Math.round(src.width * s / 32) * 32), H = Math.max(32, Math.round(src.height * s / 32) * 32);
     const cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
@@ -124,34 +131,77 @@
     return boxes;
   }
 
-  // 回転矩形を切り出して、高さ48の横長画像のテンソルにする
-  function cropTensor(src, b) {
+  // 回転矩形を、傾きを戻したまっすぐな画像として切り出す（縦長は90°回して横にする）
+  function cropUpright(src, b) {
     const bw = Math.round(b.w), bh = Math.round(b.h);
     if (bw < 4 || bh < 4) return null;
     const vertical = bh / bw >= 1.5;
-    const ch = 48;
-    const ratio = vertical ? bh / bw : bw / bh;
-    const rw = Math.min(2400, Math.ceil(ch * ratio));
-    const W = Math.max(320, rw);
     const cv = document.createElement("canvas");
-    cv.width = W; cv.height = ch;
+    cv.width = vertical ? bh : bw; cv.height = vertical ? bw : bh;
     const ctx = cv.getContext("2d", { willReadFrequently: true });
-    ctx.fillStyle = "rgb(128,128,128)";
-    ctx.fillRect(0, 0, W, ch);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.save();
-    if (vertical) { ctx.translate(0, ch); ctx.rotate(-Math.PI / 2); ctx.scale(ch / bw, rw / bh); }   // 縦書きは90°回転して横にする
-    else ctx.scale(rw / bw, ch / bh);
-    // 回転矩形の中心を原点に移し、矩形の傾きを戻して描く
+    if (vertical) { ctx.translate(0, cv.height); ctx.rotate(-Math.PI / 2); }
     ctx.translate(bw / 2, bh / 2);
     ctx.rotate(-b.ang);
     ctx.translate(-b.cx, -b.cy);
     ctx.drawImage(src, 0, 0);
     ctx.restore();
-    const px = ctx.getImageData(0, 0, W, ch).data;
-    const t = toTensor(px, W, ch);
-    // 余白部分は0（=灰色）にそろえる
+    return cv;
+  }
+  // PP-OCR 用：高さ48にそろえ、幅は比率のまま（最低320、右は灰色）。BGR
+  function recTensor(img) {
+    const ch = 48;
+    const rw = Math.min(2400, Math.ceil(ch * img.width / img.height));
+    const W = Math.max(320, rw);
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = ch;
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "rgb(128,128,128)"; ctx.fillRect(0, 0, W, ch);
+    ctx.drawImage(img, 0, 0, rw, ch);
+    const t = toTensor(ctx.getImageData(0, 0, W, ch).data, W, ch);
     for (let c = 0; c < 3; c++) for (let y = 0; y < ch; y++) for (let x = rw; x < W; x++) t[c * W * ch + y * W + x] = 0;
     return { t, W, ch };
+  }
+  // NDLOCR-Lite 用：256×24 に引き伸ばす。RGB
+  function ndlTensor(img) {
+    const W = 256, H = 24;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H).data, plane = W * H, out = new Float32Array(3 * plane);
+    for (let i = 0, p = 0; p < plane; p++, i += 4) {
+      out[p] = d[i] / 127.5 - 1; out[plane + p] = d[i + 1] / 127.5 - 1; out[2 * plane + p] = d[i + 2] / 127.5 - 1;
+    }
+    return new global.ort.Tensor("float32", out, [1, 3, H, W]);
+  }
+
+  // NDLOCR-Lite（1文字ずつ順に出す）を実行し、終わりの印までの各位置について、残す文字の対数確率を取り出す
+  async function runNdl(img, keepCols, keepChars) {
+    const o = await recN.run({ [recN.inputNames[0]]: ndlTensor(img) });
+    const out = o[recN.outputNames[0]];
+    const [, P, C] = out.dims, d = out.data, K = keepCols.length;
+    const lps = [], seq = [];
+    for (let s = 0; s < P; s++) {
+      const off = s * C;
+      let mx = -Infinity, best = 0;
+      for (let c = 0; c < C; c++) if (d[off + c] > mx) { mx = d[off + c]; best = c; }
+      if (best === 0) break;                      // 終わりの印
+      let sum = 0;
+      for (let c = 0; c < C; c++) sum += Math.exp(d[off + c] - mx);
+      const lz = mx + Math.log(sum);
+      lps.push({ off, lz, mx });
+      seq.push({ t: s, ch: dictN[best] });
+    }
+    const T = lps.length;
+    const lp = new Float32Array(T * K), blank = new Float32Array(T).fill(-99), max = new Float32Array(T);
+    lps.forEach((q, s) => {
+      max[s] = q.mx - q.lz;
+      for (let k = 0; k < K; k++) lp[s * K + k] = d[q.off + keepCols[k]] - q.lz;
+    });
+    return { T, kind: "seq", chars: keepChars, lp, blank, max, seq };
   }
 
   // 認識モデルを実行し、残す文字（keep）の対数確率だけを取り出す
@@ -184,23 +234,27 @@
     return { chars, cols };
   }
 
-  // keep: reader.js が照合に使う文字。戻り値: { canvas, items: [{ x, x2, top, bottom, A, B }] }
-  async function recognize(img, onProgress, keep) {
+  // keep: reader.js が照合に使う文字。rect: 読み取る範囲（元画像の画素、省略で全体）
+  // 戻り値: { canvas, items: [{ x, x2, top, bottom, A, B }] }
+  // 文字の切り出しは高い解像度（長辺2400まで）から行う（スマホの写真で手書きの行が小さくつぶれないように）
+  async function recognize(img, onProgress, keep, rect) {
     await init(onProgress);
-    const src = toCanvas(img, 1600, 1440);
+    const src = toCanvas(img, 2400, 1440, rect);
     onProgress && onProgress("文字の場所を探しています…");
     const boxes = await detect(src);
-    const kA = colsFor(dictA, keep || ""), kB = colsFor(dictB, keep || "");
+    const kA = colsFor(dictA, keep || ""), kJ = colsFor(dictJ, keep || ""), kN = colsFor(dictN, keep || "");
     const items = [];
     for (let i = 0; i < boxes.length; i++) {
       onProgress && onProgress(`文字を読んでいます… ${i + 1}/${boxes.length}`);
       const b = boxes[i];
-      const x = cropTensor(src, b);
-      if (!x) continue;
+      const img = cropUpright(src, b);
+      if (!img) continue;
+      const x = recTensor(img);
       const A = await runRec(recA, dictA, kA.cols, kA.chars, x);
-      const B = await runRec(recB, dictB, kB.cols, kB.chars, x);
-      if (!A.seq.length && !B.seq.length) continue;
-      items.push({ x: b.cx - b.w / 2, x2: b.cx + b.w / 2, top: b.cy - b.h / 2, bottom: b.cy + b.h / 2, A, B });
+      const J = await runRec(recJ, dictJ, kJ.cols, kJ.chars, x);
+      const B = await runNdl(img, kN.cols, kN.chars);
+      if (!A.seq.length && !J.seq.length && !B.seq.length) continue;
+      items.push({ x: b.cx - b.w / 2, x2: b.cx + b.w / 2, top: b.cy - b.h / 2, bottom: b.cy + b.h / 2, A, J, B });
     }
     return { canvas: src, items };
   }
