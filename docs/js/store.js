@@ -45,7 +45,7 @@
     }
     for (const s of data.sites) {
       const def = D.sites.find(x => x.label === s.label);
-      if (def) s.aliases = [...new Set([...(s.aliases || []), ...def.aliases])];
+      if (def) { s.aliases = [...new Set([...(s.aliases || []), ...def.aliases])]; if (def.common && s.common == null) s.common = true; }
     }
     data.rules = data.rules.map(r => { const def = D.rules.find(x => x.id === r.id); return def ? clone(def) : r; });
     addBy(data.rules, D.rules, "id");

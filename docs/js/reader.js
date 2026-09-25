@@ -52,10 +52,11 @@
         if (k.length >= 2) drugs.push({ key: k, emit: s.name, drug: d, prior: prior(d) });
       }
     }
+    const variants = (global.KarteParser && global.KarteParser.siteVariants) || (w => [w]);
     for (const s of data.sites || []) {
-      for (const w of new Set([s.label, ...(s.aliases || [])])) {
+      for (const w of new Set([s.label, ...(s.aliases || [])].flatMap(variants))) {
         const k = keyOf(w);
-        if (k.length >= 2) sites.push({ key: k, emit: s.label });   // 1文字（手・足など）は誤検出が多いので照合しない
+        if (k.length >= 2) sites.push({ key: k, emit: s.label, prior: s.common ? P.common * 0.5 : 0 });   // 1文字（手・足など）は誤検出が多いので照合しない
       }
     }
     const times = TIMES_TOKENS.map(([w, emit]) => ({ key: w, emit }));

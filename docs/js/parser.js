@@ -47,9 +47,30 @@
       keys: [...new Set([d.name, ...(d.aliases || [])].map(fuzzkey).filter(Boolean))],
     }));
   }
+  // 部位の書き方の揺れ（漢字・カタカナ・ひらがな・まぜ書き）を自動で増やす。例: 体わるいところ → カラダワルイトコロ・体ワルイトコロ など
+  const SITE_WORDS = [["全身", "ゼンシン"], ["保湿", "ホシツ"], ["親指", "オヤユビ"], ["下肢", "カシ"], ["汗止め", "アセドメ"], ["刺され", "ササレ"],
+    ["顔", "カオ"], ["体", "カラダ"], ["首", "クビ"], ["手", "テ"], ["足", "アシ"], ["虫", "ムシ"], ["頭", "アタマ"], ["口", "クチ"],
+    ["指", "ユビ"], ["爪", "ツメ"], ["裏", "ウラ"], ["悪い", "ワルイ"], ["痒い", "カユイ"], ["所", "トコロ"]];
+  function siteVariants(text) {
+    const t = hiraToKata(String(text || "").normalize("NFKC"));
+    const segs = [];
+    for (let i = 0; i < t.length;) {
+      let hit = null;
+      for (const pair of SITE_WORDS) {
+        for (const w of pair) if (t.startsWith(w, i) && (!hit || w.length > hit.w.length)) hit = { w, pair };
+      }
+      if (hit) { segs.push(hit.pair); i += hit.w.length; } else { segs.push([t[i]]); i++; }
+    }
+    let out = [""];
+    for (const alts of segs) {
+      out = out.flatMap(o => alts.map(a => o + a));
+      if (out.length > 64) out = out.slice(0, 64);
+    }
+    return out;
+  }
   function prepareSites(sites) {
     return sites.map(s => Object.assign({}, s, {
-      keys: [...new Set([s.label, ...(s.aliases || [])].map(fuzzkey).filter(Boolean))],
+      keys: [...new Set([s.label, ...(s.aliases || [])].flatMap(siteVariants).map(fuzzkey).filter(Boolean))],
     }));
   }
   function matchDrug(text, drugs) {
@@ -505,5 +526,5 @@
     }).join("\n");
   }
 
-  global.KarteParser = { parse, timesLabel, lookupOcrFix, norm, fuzzkey, similarity, matchDrug, prepareDrugs, prepareSites, bagToText, usageText, GAIYOU_KINDS };
+  global.KarteParser = { parse, timesLabel, lookupOcrFix, siteVariants, norm, fuzzkey, similarity, matchDrug, prepareDrugs, prepareSites, bagToText, usageText, GAIYOU_KINDS };
 })(typeof window !== "undefined" ? window : globalThis);
