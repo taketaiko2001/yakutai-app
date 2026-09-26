@@ -13,7 +13,7 @@
   // 行の中の「回数」の書き方（カルテ → 印字）
   const TIMES_TOKENS = [["夜1", "夜1"], ["日1", "1"], ["日2", "2"], ["日3", "3"], ["数回", "数"]];
 
-  const P = { confMinN: 3, confExtra: 3.0, bonus: 1.0, common: 1.0, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
+  const P = { confMinN: 3, confExtra: 3.0, bonus: 1.0, common: 1.0, adopted: 0.3, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
 
   function kata(s) {
     return String(s || "").normalize("NFKC").replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
@@ -38,12 +38,14 @@
   function buildLexicon(data, learn) {
     const drugs = [], sites = [];
     const used = (learn && learn.drugCount) || {}, usedSite = (learn && learn.siteCount) || {};
-    const prior = d => (d.common ? P.common : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (used[d.name] || 0)));
+    const prior = d => (d.common ? P.common : 0) + (d.adopted ? P.adopted : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (used[d.name] || 0)));
     for (const d of data.drugs || []) {
       const emit = d.mix ? (d.aliases && d.aliases[0]) || d.name : d.name;
       const keys = [...new Set([d.name, ...(d.aliases || [])].map(keyOf))].filter(k => k.length >= 2 && k.length <= 16);
       // 2文字の略称（ミノ・GM など）は他の行に誤って当てはまりやすいので、長い呼び名がある薬では使わない
-      const useKeys = keys.some(k => k.length >= 3) && !d.mix ? keys.filter(k => k.length >= 3) : keys;
+      // よく使う薬以外は、3文字の略称も（4文字以上の呼び名があれば）使わない。採用薬を増やしたときの誤検出を防ぐ
+      const minLen = d.mix ? 0 : d.common ? 3 : 4;
+      const useKeys = keys.some(k => k.length >= minLen) ? keys.filter(k => k.length >= minLen) : keys.filter(k => k.length >= Math.min(3, minLen)).length ? keys.filter(k => k.length >= Math.min(3, minLen)) : keys;
       for (const k of useKeys) drugs.push({ key: k, emit, drug: d, prior: prior(d) });
     }
     for (const s of data.sets || []) {

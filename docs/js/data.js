@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 3,
+ "version": 4,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -13,7 +13,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "3T"
+   "dose": "3T",
+   "adopted": true
   },
   {
    "name": "トラネキサム酸錠",
@@ -27,7 +28,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "3T"
+   "dose": "3T",
+   "adopted": true
   },
   {
    "name": "ユベラ錠50mg",
@@ -40,7 +42,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "3T"
+   "dose": "3T",
+   "adopted": true
   },
   {
    "name": "レボセチリジン塩酸塩錠",
@@ -54,7 +57,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "1T"
+   "dose": "1T",
+   "adopted": true
   },
   {
    "name": "ロラタジン錠",
@@ -68,7 +72,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "1T"
+   "dose": "1T",
+   "adopted": true
   },
   {
    "name": "フェキソフェナジン塩酸塩錠",
@@ -79,7 +84,8 @@ window.DEFAULT_DATA = {
     "ふぇきそふぇなじん",
     "アレグラ"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "オロパタジン塩酸塩錠",
@@ -94,7 +100,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "common": true,
-   "dose": "2T"
+   "dose": "2T",
+   "adopted": true
   },
   {
    "name": "エピナスチン塩酸塩錠",
@@ -105,7 +112,8 @@ window.DEFAULT_DATA = {
     "えぴなすちん",
     "アレジオン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ビラノア錠",
@@ -114,9 +122,11 @@ window.DEFAULT_DATA = {
    "times": "",
    "aliases": [
     "びらのあ",
-    "ビラスチン"
+    "ビラスチン",
+    "ビラノア"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "デザレックス錠",
@@ -124,9 +134,11 @@ window.DEFAULT_DATA = {
    "form": "錠剤",
    "times": "",
    "aliases": [
-    "でざれっくす"
+    "でざれっくす",
+    "デスロラタジン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ルパフィン錠",
@@ -136,7 +148,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "るぱふぃん"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ベポタスチンベシル酸塩錠",
@@ -147,7 +160,8 @@ window.DEFAULT_DATA = {
     "べぽたすちん",
     "タリオン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "クラリスロマイシン錠",
@@ -171,7 +185,8 @@ window.DEFAULT_DATA = {
     "ミノ"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ドキシサイクリン塩酸塩錠",
@@ -194,7 +209,8 @@ window.DEFAULT_DATA = {
     "るりっど",
     "ルリッド"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ファロム錠",
@@ -207,16 +223,18 @@ window.DEFAULT_DATA = {
    "note": ""
   },
   {
-   "name": "セフカペンピボキシル塩酸塩錠",
+   "name": "フロモックス錠",
    "type": "naifuku",
    "form": "錠剤",
    "times": "",
    "aliases": [
+    "セフカペンピボキシル塩酸塩錠",
     "ふろもっくす",
     "フロモックス",
     "セフカペン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "バラシクロビル錠",
@@ -228,7 +246,8 @@ window.DEFAULT_DATA = {
     "バルトレックス",
     "バラシクロビル"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ファムシクロビル錠",
@@ -249,7 +268,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "あめなりーふ"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "テルビナフィン錠",
@@ -260,7 +280,8 @@ window.DEFAULT_DATA = {
     "てるびなふぃん",
     "ラミシール錠"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "イトラコナゾールカプセル",
@@ -275,16 +296,19 @@ window.DEFAULT_DATA = {
    "note": ""
   },
   {
-   "name": "プレドニゾロン錠",
+   "name": "プレドニン錠5mg",
    "type": "naifuku",
    "form": "錠剤",
    "times": "",
    "aliases": [
+    "プレドニゾロン錠",
     "ぷれどにん",
     "プレドニン",
-    "PSL"
+    "PSL",
+    "プレドニゾロン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ロキソプロフェンNa錠",
@@ -295,18 +319,22 @@ window.DEFAULT_DATA = {
     "ろきそにん",
     "ロキソニン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
-   "name": "アセトアミノフェン錠",
+   "name": "カロナール錠200",
    "type": "naifuku",
    "form": "錠剤",
    "times": "",
    "aliases": [
+    "アセトアミノフェン錠",
     "かろなーる",
-    "カロナール"
+    "カロナール",
+    "アセトアミノフェン"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "レバミピド錠",
@@ -317,7 +345,8 @@ window.DEFAULT_DATA = {
     "むこすた",
     "ムコスタ"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "L-システイン錠",
@@ -337,9 +366,12 @@ window.DEFAULT_DATA = {
    "times": "",
    "aliases": [
     "じゅうみはいどくとう",
-    "十味"
+    "十味",
+    "十味敗毒湯",
+    "ジュウミハイドクトウ"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "荊芥連翹湯エキス顆粒",
@@ -374,7 +406,8 @@ window.DEFAULT_DATA = {
     "ヘパロ"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ヘパリン類似物質クリーム",
@@ -398,9 +431,11 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ヘパ油性",
     "ヘパソフト",
-    "ヒルドイドソフト"
+    "ヒルドイドソフト",
+    "ヒルドイドソフト軟膏"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ヘパリン類似物質スプレー",
@@ -409,9 +444,12 @@ window.DEFAULT_DATA = {
    "times": "2",
    "aliases": [
     "ヘパsp",
-    "ヘパスプレー"
+    "ヘパスプレー",
+    "ヘパ泡",
+    "ヘパリン泡"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "パンデルローション",
@@ -422,7 +460,8 @@ window.DEFAULT_DATA = {
     "パンデルlo"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "パンデル軟膏",
@@ -446,19 +485,23 @@ window.DEFAULT_DATA = {
    "note": ""
   },
   {
-   "name": "ゲンタシン軟膏",
+   "name": "ゲンタマイシン硫酸塩軟膏",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
+    "ゲンタシン軟膏",
     "GMo",
     "GM軟膏",
     "GM",
     "げんたしん",
-    "ゲンタマイシン"
+    "ゲンタマイシン",
+    "ゲンタシン",
+    "ゲンタマイシンo"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "リンデロンVG軟膏",
@@ -481,17 +524,8 @@ window.DEFAULT_DATA = {
     "ロコイドo",
     "ろこいど"
    ],
-   "note": ""
-  },
-  {
-   "name": "キンダベート軟膏",
-   "type": "gaiyou",
-   "form": "ぬり薬",
-   "times": "2",
-   "aliases": [
-    "きんだべーと"
-   ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "クロベタゾン酪酸エステル軟膏",
@@ -504,10 +538,14 @@ window.DEFAULT_DATA = {
     "クロラクo",
     "クロ酪o",
     "クロ酪",
-    "くろらく"
+    "くろらく",
+    "キンダベート軟膏",
+    "きんだべーと",
+    "キンダベート"
    ],
    "note": "キンダベートの後発品",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "アンテベート軟膏",
@@ -517,7 +555,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "あんてべーと"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "マイザー軟膏",
@@ -530,14 +569,21 @@ window.DEFAULT_DATA = {
    "note": ""
   },
   {
-   "name": "デルモベート軟膏",
+   "name": "クロベタゾールプロピオン酸エステル軟膏",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
-    "でるもべーと"
+    "デルモベート軟膏",
+    "でるもべーと",
+    "デルモベート",
+    "デルモo",
+    "クロ(P)o",
+    "クロPo",
+    "クロベタゾール軟膏"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "プロトピック軟膏",
@@ -547,7 +593,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ぷろとぴっく"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "コレクチム軟膏",
@@ -557,7 +604,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "これくちむ"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "モイゼルト軟膏",
@@ -567,7 +615,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "もいぜると"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ブイタマークリーム",
@@ -577,7 +626,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ぶいたまー"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "白色ワセリン",
@@ -589,7 +639,8 @@ window.DEFAULT_DATA = {
     "ワセリン",
     "プロペト"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "亜鉛華軟膏",
@@ -599,7 +650,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "あえんか"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ウレパールクリーム",
@@ -622,24 +674,35 @@ window.DEFAULT_DATA = {
    "note": ""
   },
   {
-   "name": "ルリコンクリーム",
+   "name": "ルリコナゾールクリーム",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "1",
    "aliases": [
-    "るりこん"
+    "ルリコンクリーム",
+    "るりこん",
+    "ルリコン",
+    "ルリコナゾール",
+    "ルリコンcn",
+    "るりこなぞーる"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
-   "name": "ラミシールクリーム",
+   "name": "テルビナフィン塩酸塩クリーム",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "1",
    "aliases": [
-    "らみしーる"
+    "ラミシールクリーム",
+    "らみしーる",
+    "ラミシール",
+    "テルビナフィンcn",
+    "テルビナフィンクリーム"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "アスタットクリーム",
@@ -664,24 +727,19 @@ window.DEFAULT_DATA = {
    "common": true
   },
   {
-   "name": "アクアチムクリーム",
+   "name": "ナジフロキサシンクリーム",
    "type": "gaiyou",
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
-    "あくあちむ"
+    "アクアチムクリーム",
+    "あくあちむ",
+    "アクアチム",
+    "ナジフロキサシン",
+    "なじふろきさしん"
    ],
-   "note": ""
-  },
-  {
-   "name": "ダラシンTゲル",
-   "type": "gaiyou",
-   "form": "ぬり薬",
-   "times": "2",
-   "aliases": [
-    "だらしん"
-   ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ダラシンTローション",
@@ -696,7 +754,8 @@ window.DEFAULT_DATA = {
     "だらしんてぃー"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ディフェリンゲル",
@@ -706,7 +765,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "でぃふぇりん"
    ],
-   "note": "添付文書の用法: 1日1回 就寝前"
+   "note": "添付文書の用法: 1日1回 就寝前",
+   "adopted": true
   },
   {
    "name": "ベピオゲル",
@@ -716,7 +776,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "べぴお"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "エピデュオゲル",
@@ -746,7 +807,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ろぜっくす"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "ドボベット軟膏",
@@ -756,7 +818,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "どぼべっと"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "マーデュオックス軟膏",
@@ -776,7 +839,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "おきさろーる"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "クレナフィン爪外用液",
@@ -786,7 +850,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "くれなふぃん"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "ルコナック爪外用液",
@@ -796,7 +861,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "るこなっく"
    ],
-   "note": "添付文書の用法: 1日1回"
+   "note": "添付文書の用法: 1日1回",
+   "adopted": true
   },
   {
    "name": "フシジンレオ軟膏",
@@ -816,7 +882,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "おいらっくす"
    ],
-   "note": ""
+   "note": "",
+   "adopted": true
   },
   {
    "name": "モーラステープ",
@@ -840,7 +907,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "サレックス＋ヘパリン類似物質の混合。容器番号 1番・2番=30g・3番=50g（例: サヘパ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ベタヘパ（混合軟膏）",
@@ -854,7 +922,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "ベタ＋ヘパリン類似物質の混合。容器番号 1番・2番=30g・3番=50g（例: ベタヘパ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ロヘパ（混合軟膏）",
@@ -867,7 +936,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "ロコイド＋ヘパリン類似物質の混合。容器番号 1番・2番=30g・3番=50g（例: ロヘパ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "クロヘパ（混合軟膏）",
@@ -880,7 +950,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "クロ＋ヘパリン類似物質の混合。容器番号 1番・2番=30g・3番=50g（例: クロヘパ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "サZ（混合軟膏）",
@@ -894,7 +965,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "サレックス＋亜鉛華軟膏の混合。容器番号 1番・2番=30g・3番=50g（例: サZ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ベZ（混合軟膏）",
@@ -909,7 +981,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "ベタ＋亜鉛華軟膏の混合。容器番号 1番・2番=30g・3番=50g（例: ベZ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ロZ（混合軟膏）",
@@ -923,7 +996,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "ロコイド＋亜鉛華軟膏の混合。容器番号 1番・2番=30g・3番=50g（例: ロZ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "クロZ（混合軟膏）",
@@ -937,7 +1011,8 @@ window.DEFAULT_DATA = {
    ],
    "note": "クロ＋亜鉛華軟膏の混合。容器番号 1番・2番=30g・3番=50g（例: クロZ-3×2）",
    "mix": true,
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ゼビアックス油性クリーム",
@@ -951,7 +1026,8 @@ window.DEFAULT_DATA = {
     "ぜびあっくすくりーむ"
    ],
    "note": "添付文書の用法: 1日1回",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ベピオウォッシュゲル",
@@ -963,7 +1039,8 @@ window.DEFAULT_DATA = {
     "べぴおうぉっしゅ"
    ],
    "note": "添付文書の用法: 1日1回",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "クリンダマイシンゲル",
@@ -975,10 +1052,12 @@ window.DEFAULT_DATA = {
     "クリーゲル",
     "クリンダ",
     "ダラシンゲル",
-    "くりんだ"
+    "くりんだ",
+    "ダラシンTゲル"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "デルモベートスカルプローション",
@@ -1005,7 +1084,8 @@ window.DEFAULT_DATA = {
     "くろべたぞーる"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "ケラチナミンクリーム",
@@ -1018,7 +1098,8 @@ window.DEFAULT_DATA = {
     "けらちなみん"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "塩化アルミニウム液",
@@ -1032,7 +1113,8 @@ window.DEFAULT_DATA = {
     "えんかあるみにうむ"
    ],
    "note": "院内製剤（例: 塩Al 60cc 夜1）",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "レスタミンコーワクリーム",
@@ -1045,7 +1127,8 @@ window.DEFAULT_DATA = {
     "れすたみん"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "スピラゾン軟膏",
@@ -1058,7 +1141,8 @@ window.DEFAULT_DATA = {
     "すぴらぞん"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
   },
   {
    "name": "トプシムクリーム",
@@ -1071,7 +1155,880 @@ window.DEFAULT_DATA = {
     "とぷしむ"
    ],
    "note": "",
-   "common": true
+   "common": true,
+   "adopted": true
+  },
+  {
+   "name": "d-クロルフェニラミンマレイン酸塩錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "クロルフェニラミン",
+    "ポララミン",
+    "d-クロル"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "PL配合顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "PL顆粒",
+    "PL配合"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アドナ錠30mg",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "アドナ",
+    "あどな"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アレロック顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "アレロック顆粒",
+    "オロパタジン顆粒"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "エバスチンOD錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "エバスチン",
+    "エバステル",
+    "えばすちん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "エンペラシン配合錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "エンペラシン",
+    "セレスタミン",
+    "えんぺらしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "オテズラ錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "オテズラ",
+    "おてずら"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ケトチフェンシロップ",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "ケトチフェン",
+    "ザジテン",
+    "ケトチフェンsy"
+   ],
+   "note": "シロップ（分包）。袋の欄は「こな薬」扱い",
+   "adopted": true
+  },
+  {
+   "name": "酢酸亜鉛錠50mg",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "酢酸亜鉛",
+    "ノベルジン",
+    "サクサンアエン"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "シナール配合顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "シナール顆粒",
+    "シナールG"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "シプロキサン錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "シプロキサン",
+    "シプロフロキサシン",
+    "しぷろきさん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ストロメクトール錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "ストロメクトール",
+    "イベルメクチン",
+    "すとろめくとーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "セファランチン錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "セファランチン",
+    "せふぁらんちん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "セフポドキシムプロキセチル錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "セフポドキシム",
+    "バナン",
+    "バナン錠"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ネイリンカプセル",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "ネイリン",
+    "ねいりん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "バルトレックス顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "バルトレックス顆粒"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ピリドキサール錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "ピリドキサール",
+    "ピドキサール",
+    "ぴりどきさーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ファロムドライシロップ小児用",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "ファロムDS",
+    "ファロムドライシロップ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "プレガバリンOD錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "プレガバリン",
+    "リリカ",
+    "ぷれがばりん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "プロ・バンサイン錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "プロバンサイン",
+    "ぷろばんさいん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ミヤBM錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "ミヤBM",
+    "ミヤ",
+    "みやびーえむ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "メイアクトMS小児用細粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "メイアクト",
+    "めいあくと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ヨクイニンエキス錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "ヨクイニン",
+    "よくいにん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "リザベンカプセル",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "リザベン",
+    "トラニラスト",
+    "りざべん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "リボフラビン酪酸エステル錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "リボフラビン",
+    "ハイボン",
+    "りぼふらびん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "レボフロキサシン錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "レボフロキサシン",
+    "クラビット",
+    "れぼふろきさしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ロラタジンDS",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "ロラタジンDS",
+    "クラリチンDS"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "セファレキシン",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "セファレキシン",
+    "ケフレックス",
+    "せふぁれきしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ラリキシンドライシロップ",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "ラリキシン",
+    "らりきしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アモキシシリンカプセル250mg",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "アモキシシリン",
+    "サワシリン",
+    "あもきししりん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "五苓散エキス顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "五苓散",
+    "ゴレイサン"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "白虎加人参湯エキス顆粒",
+   "type": "naifuku",
+   "form": "こな薬",
+   "times": "",
+   "aliases": [
+    "白虎加人参湯",
+    "ビャッコカニンジントウ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アクトシン軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "アクトシン",
+    "アクトシンo",
+    "あくとしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アクロマイシン軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "アクロマイシン",
+    "アクロマイシンo",
+    "あくろまいしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アトラントクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "アトラント",
+    "アトラントcn",
+    "あとらんと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アトラント外用液",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "アトラント液",
+    "アトラントlo"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "アポハイドローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "アポハイド",
+    "アポハイドlo",
+    "あぽはいど"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "イオウ・カンフルローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "イオウカンフル",
+    "イオウカンフルlo",
+    "イオウ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "エキザルベ",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "エキザルベ",
+    "えきざるべ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "エクラープラスター",
+   "type": "gaiyou",
+   "form": "貼り薬",
+   "times": "1",
+   "aliases": [
+    "エクラー",
+    "えくらー"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "エクロックゲル",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "エクロック",
+    "えくろっく"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "オロパタジン点眼液",
+   "type": "gaiyou",
+   "form": "点眼薬",
+   "times": "4",
+   "aliases": [
+    "オロパタジン点眼",
+    "パタノール",
+    "オロパ点眼"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "クロベタゾールプロピオン酸エステルクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "クロ(P)cn",
+    "クロPcn",
+    "デルモベートクリーム",
+    "デルモcn"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "コムクロシャンプー",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "コムクロ",
+    "こむくろ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "サレックス軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "サレックス",
+    "サレックスo",
+    "されっくす"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "スピール膏M",
+   "type": "gaiyou",
+   "form": "貼り薬",
+   "times": "1",
+   "aliases": [
+    "スピール膏",
+    "スピール",
+    "すぴーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "スピラゾンクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "スピラゾンcn",
+    "スピラゾンクリーム"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "スミスリンローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "スミスリン",
+    "すみすりん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ゼフナートクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ゼフナート",
+    "ぜふなーと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "デキサメタゾン口腔用軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "デキサメタゾン口腔",
+    "口腔用軟膏",
+    "デキサ口腔",
+    "アフタゾロン"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ドボベットゲル",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ドボベットゲル",
+    "ドボベットg"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ドボベットフォーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ドボベットフォーム"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ニゾラールクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ニゾラール",
+    "ニゾラールcn",
+    "にぞらーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ニゾラールローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ニゾラールlo",
+    "ニゾラールローション"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ネオメドロールEE軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ネオメドロール",
+    "ねおめどろーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "バラマイシン軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "バラマイシン",
+    "ばらまいしん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ビダラビンクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ビダラビン",
+    "アラセナ",
+    "びだらびん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "フルメタ軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "フルメタ",
+    "フルメタo",
+    "ふるめた"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "フルチカゾン点鼻液",
+   "type": "gaiyou",
+   "form": "点鼻薬",
+   "times": "2",
+   "aliases": [
+    "フルチカゾン",
+    "フルチカゾン点鼻",
+    "ふるちかぞん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ブロメライン軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ブロメライン",
+    "ぶろめらいん"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "プロトピック軟膏小児用",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "プロトピック小児",
+    "プロトピック小児用"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ベピオローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ベピオlo",
+    "ベピオローション"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ボアラ軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ボアラ",
+    "ボアラo",
+    "ぼあら"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ボチシート",
+   "type": "gaiyou",
+   "form": "貼り薬",
+   "times": "1",
+   "aliases": [
+    "ボチシート",
+    "ぼちしーと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ユベラ軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ユベラo",
+    "ユベラ軟膏"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ラピフォートワイプ",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "1",
+   "aliases": [
+    "ラピフォート",
+    "らぴふぉーと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "リンデロンVGクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "VGクリーム",
+    "リンデロンVGcn"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "リンデロンVGローション",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "VGローション",
+    "リンデロンVGlo"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ロキソプロフェンNaテープ",
+   "type": "gaiyou",
+   "form": "貼り薬",
+   "times": "1",
+   "aliases": [
+    "ロキソニンテープ",
+    "ロキソプロフェンテープ",
+    "ロキソテープ"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ロコイドクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "ロコイドcn",
+    "ロコイドクリーム"
+   ],
+   "note": "",
+   "adopted": true
   }
  ],
  "sets": [
@@ -1677,5 +2634,17 @@ window.DEFAULT_DATA = {
    "title": "しみ3点セット",
    "text": "しみ3つ\n3×N 60TD"
   }
- ]
+ ],
+ "renamed": {
+  "ゲンタシン軟膏": "ゲンタマイシン硫酸塩軟膏",
+  "デルモベート軟膏": "クロベタゾールプロピオン酸エステル軟膏",
+  "ルリコンクリーム": "ルリコナゾールクリーム",
+  "ラミシールクリーム": "テルビナフィン塩酸塩クリーム",
+  "アクアチムクリーム": "ナジフロキサシンクリーム",
+  "アセトアミノフェン錠": "カロナール錠200",
+  "プレドニゾロン錠": "プレドニン錠5mg",
+  "セフカペンピボキシル塩酸塩錠": "フロモックス錠",
+  "キンダベート軟膏": "クロベタゾン酪酸エステル軟膏",
+  "ダラシンTゲル": "クリンダマイシンゲル"
+ }
 };

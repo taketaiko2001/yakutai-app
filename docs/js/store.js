@@ -36,6 +36,15 @@
   function upgrade() {
     if ((data.dataVersion || 1) >= D.version) return;
     const addBy = (list, defs, key) => { for (const x of defs) if (!list.some(y => y[key] === x[key])) list.push(clone(x)); };
+    // 名前を変えた薬（先発名 → 採用している製品名）・まとめた薬：端末の薬と学習データの名前も付け替える
+    for (const [o, n] of Object.entries(D.renamed || {})) {
+      const d = data.drugs.find(x => x.name === o);
+      if (!d) continue;
+      const t = data.drugs.find(x => x.name === n);
+      if (t) { t.aliases = [...new Set([...(t.aliases || []), o])]; data.drugs.splice(data.drugs.indexOf(d), 1); }
+      else { d.name = n; d.aliases = [...new Set([o, ...(d.aliases || [])])]; }
+      data.learn = JSON.parse(JSON.stringify(data.learn).split(o).join(n));
+    }
     addBy(data.drugs, D.drugs, "name");
     addBy(data.sites, D.sites, "label");
     data.sets = data.sets || [];
@@ -44,7 +53,7 @@
       const def = D.drugs.find(x => x.name === d.name);
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
-      for (const k of ["common", "mix", "dose"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      for (const k of ["common", "mix", "dose", "adopted"]) if (def[k] != null && d[k] == null) d[k] = def[k];
     }
     for (const s of data.sites) {
       const def = D.sites.find(x => x.label === s.label);
