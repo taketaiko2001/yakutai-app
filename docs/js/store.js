@@ -10,7 +10,7 @@
       version: 1,
       settings: { gaiyouDefaultTimes: "2", yearFormat: "reiwa", paper: "bag", paperOffsetX: 0, paperOffsetY: 0, doctor: "" },
       // 医師（カルテの日付の横の印）。印の文字で見分け、医師ごとに字の癖・よく使う薬や部位を覚える
-      doctors: [{ id: "i", mark: "イ", name: "イ" }, { id: "k", mark: "K", name: "K" }],
+      doctors: [{ id: "i", mark: "イ", name: "イ" }, { id: "k", mark: "K", name: "K" }, { id: "a", mark: "ア", name: "ア" }],
       sizes: clone(D.layout.sizes),
       calibration: clone(D.layout.calibration),
       dataVersion: D.version,
@@ -45,8 +45,18 @@
       else { d.name = n; d.aliases = [...new Set([o, ...(d.aliases || [])])]; }
       data.learn = JSON.parse(JSON.stringify(data.learn).split(o).join(n));
     }
+    // 名前を変えた部位（薬袋の書き方にそろえたもの。例: かお → 顔）
+    for (const [o, n] of Object.entries(D.siteRenamed || {})) {
+      const s = data.sites.find(x => x.label === o);
+      if (!s) continue;
+      const t = data.sites.find(x => x.label === n);
+      if (t) { t.aliases = [...new Set([...(t.aliases || []), o, ...(s.aliases || [])])]; data.sites.splice(data.sites.indexOf(s), 1); }
+      else { s.label = n; s.aliases = [...new Set([o, ...(s.aliases || [])])]; }
+      data.learn = JSON.parse(JSON.stringify(data.learn).split(JSON.stringify(o)).join(JSON.stringify(n)));
+    }
     addBy(data.drugs, D.drugs, "name");
     addBy(data.sites, D.sites, "label");
+    addBy(data.doctors, defaults().doctors, "mark");
     data.sets = data.sets || [];
     addBy(data.sets, D.sets || [], "name");
     for (const d of data.drugs) {                 // 初期データ側で増えた略称・印などを反映

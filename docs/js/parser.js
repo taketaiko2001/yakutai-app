@@ -119,11 +119,14 @@
   const RE_PAREN = /[(（]\s*([^)）]*)[)）]?/;
   const RE_RP = /^\s*[^\s(（]{1,3}\)\s*/;   // 「Rp)」とそのOCR読み違い
   // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)）。部位ではないので読み飛ばす
-  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ)\s*[)）]?/g;
+  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|乳剤?性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ)\s*[)）]?/g;
+  // チューブの大きさ（例: ヘパcr(25)＝25gのチューブ）と年齢（例: (12才)）。部位ではないので読み飛ばす
+  const RE_TUBE_NOTE = /[(（]\s*(?:5|10|15|20|25|30|50|100)\s*g?\s*[)）]/g;
+  const RE_AGE_NOTE = /[(（]\s*\d{1,3}\s*[才歳][)）]?/g;
   // 処置の欄（「(S) B-1」など）。院内で使う薬なので薬袋にしない。次の「Rp)」か「・」の行まで読み飛ばす
   const RE_SHOCHI = /^\s*(?:[(（]\s*[SＳsｓ]\s*[)）]|[Ⓢⓢ]|処置)/;
   const RE_BULLET = /^[\s・･.\-‐ー—*]+/;
-  const RE_JP2 = /[぀-ヿ一-鿿]{2,}/;
+  const RE_JP2 = /[぀-ヿ一-鿿]{2,}|^\s*[一-鿿]\s*$/;   // 部位らしい文字（かな2文字以上、または「顔」「体」など漢字1文字）
 
   function qtyMatches(t) { return [...t.matchAll(RE_QTY_G)]; }
 
@@ -222,7 +225,7 @@
     for (let raw of lines) {
       let line = raw.trim();
       if (!line || line.startsWith("#")) continue;
-      line = line.replace(RE_MAKER_NOTE, " ").replace(/\s+/g, " ").trim();
+      line = line.replace(RE_MAKER_NOTE, " ").replace(RE_TUBE_NOTE, " ").replace(RE_AGE_NOTE, " ").replace(/\s+/g, " ").trim();
       if (!line || RE_BULLET.test(line) && !line.replace(RE_BULLET, "")) continue;
       if (RE_SHOCHI.test(norm(line))) { inShochi = true; res.ignored.push(line); continue; }
       if (inShochi) {

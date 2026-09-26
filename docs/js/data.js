@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 7,
+ "version": 8,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -403,7 +403,10 @@ window.DEFAULT_DATA = {
     "ヘパローション",
     "へぱろーしょん",
     "ヒルドイドローション",
-    "ヘパロ"
+    "ヘパロ",
+    "ヒルlo",
+    "ヒルドイドlo",
+    "ヘパlo乳"
    ],
    "note": "",
    "common": true,
@@ -625,10 +628,14 @@ window.DEFAULT_DATA = {
    "form": "ぬり薬",
    "times": "1",
    "aliases": [
-    "ぶいたまー"
+    "ぶいたまー",
+    "ブイタマーcr",
+    "ブイタマーcn",
+    "ブイタマー"
    ],
    "note": "添付文書の用法: 1日1回",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "白色ワセリン",
@@ -742,10 +749,13 @@ window.DEFAULT_DATA = {
     "あくあちむ",
     "アクアチム",
     "ナジフロキサシン",
-    "なじふろきさしん"
+    "なじふろきさしん",
+    "ナジフロキサシンcr",
+    "ナジフロキサシンcn"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "ダラシンTローション",
@@ -856,10 +866,13 @@ window.DEFAULT_DATA = {
    "form": "ぬり薬",
    "times": "1",
    "aliases": [
-    "くれなふぃん"
+    "くれなふぃん",
+    "クレナフィン",
+    "クレナフィンlo"
    ],
    "note": "添付文書の用法: 1日1回",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "ルコナック爪外用液",
@@ -1046,7 +1059,10 @@ window.DEFAULT_DATA = {
     "ベピオウォッシュ",
     "べぴおうぉっしゅ",
     "ベピオwa",
-    "ベピオワ"
+    "ベピオワ",
+    "ベピオwg",
+    "ベピオWG",
+    "ベピオウォッシュゲル"
    ],
    "note": "添付文書の用法: 1日1回",
    "common": true,
@@ -1162,7 +1178,8 @@ window.DEFAULT_DATA = {
    "aliases": [
     "トプシム",
     "トプシムcn",
-    "とぷしむ"
+    "とぷしむ",
+    "トプシムcr"
    ],
    "note": "",
    "common": true,
@@ -1758,10 +1775,12 @@ window.DEFAULT_DATA = {
    "times": "2",
    "aliases": [
     "スピラゾンcn",
-    "スピラゾンクリーム"
+    "スピラゾンクリーム",
+    "スピラゾンcr"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "スミスリンローション",
@@ -2046,10 +2065,12 @@ window.DEFAULT_DATA = {
    "times": "2",
    "aliases": [
     "ロコイドcn",
-    "ロコイドクリーム"
+    "ロコイドクリーム",
+    "ロコイドcr"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   }
  ],
  "sets": [
@@ -2276,9 +2297,9 @@ window.DEFAULT_DATA = {
    ]
   },
   {
-   "label": "おやゆび",
+   "label": "オヤユビ",
    "aliases": [
-    "オヤユビ",
+    "おやゆび",
     "親指"
    ]
   },
@@ -2297,11 +2318,12 @@ window.DEFAULT_DATA = {
    ]
   },
   {
-   "label": "かお",
+   "label": "顔",
    "aliases": [
-    "カオ",
-    "顔"
-   ]
+    "かお",
+    "カオ"
+   ],
+   "common": true
   },
   {
    "label": "キズ",
@@ -2388,6 +2410,55 @@ window.DEFAULT_DATA = {
     "口まわり",
     "口のまわり",
     "くちのまわり"
+   ]
+  },
+  {
+   "label": "爪",
+   "aliases": [
+    "つめ",
+    "ツメ"
+   ]
+  },
+  {
+   "label": "うで",
+   "aliases": [
+    "ウデ",
+    "腕"
+   ]
+  },
+  {
+   "label": "体アセモ",
+   "aliases": [
+    "カラダアセモ",
+    "体あせも",
+    "からだあせも",
+    "体アセモ"
+   ]
+  },
+  {
+   "label": "顔赤いところ",
+   "aliases": [
+    "カオアカイトコロ",
+    "顔あかいところ",
+    "かおあかいところ",
+    "カオ赤いところ"
+   ]
+  },
+  {
+   "label": "体アトピー",
+   "aliases": [
+    "カラダアトピー",
+    "からだアトピー",
+    "体あとぴー"
+   ]
+  },
+  {
+   "label": "顔・首",
+   "aliases": [
+    "カオクビ",
+    "顔首",
+    "かおくび",
+    "カオ・クビ"
    ]
   }
  ],
@@ -2763,5 +2834,9 @@ window.DEFAULT_DATA = {
   "キンダベート軟膏": "クロベタゾン酪酸エステル軟膏",
   "ダラシンTゲル": "クリンダマイシンゲル",
   "ヘパリン類似物質クリーム": "ヘパリン類似物質油性クリーム"
+ },
+ "siteRenamed": {
+  "かお": "顔",
+  "おやゆび": "オヤユビ"
  }
 };
