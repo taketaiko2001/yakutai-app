@@ -53,7 +53,7 @@
       const def = D.drugs.find(x => x.name === d.name);
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
-      for (const k of ["common", "mix", "dose", "adopted"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      for (const k of ["common", "mix", "dose", "adopted", "syrup"]) if (def[k] != null && d[k] == null) d[k] = def[k];
     }
     for (const s of data.sites) {
       const def = D.sites.find(x => x.label === s.label);

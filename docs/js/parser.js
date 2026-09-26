@@ -385,6 +385,15 @@
       if (it.qty != null) per = bag.tonpuku ? it.qty : (times ? it.qty / times : null);
       (rows[row] = rows[row] || []).push(per);
     }
+    // シロップ（ケトチフェン）は「こなぐすり」の欄に「シロップ○本」と書く（本数の記載がなければ1本）
+    const syrups = items.filter(it => it.drug.syrup);
+    if (syrups.length) {
+      delete rows.powder;
+      const n = syrups.reduce((a, it) => a + (it.unit === "本" && it.qty ? it.qty : 1), 0);
+      bag.powder = `シロップ${fmtNum(n)}本`;
+      bag.syrup = true;
+      if (items.length === syrups.length) for (const r of Object.keys(rows)) delete rows[r];
+    }
     if (!bag.tonpuku) {
       for (const [row, pers] of Object.entries(rows)) {
         if (pers.some(p => p == null)) { unsure.add(row); continue; }

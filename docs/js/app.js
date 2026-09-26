@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26b";
+const APP_VERSION = "2026-09-26c";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;

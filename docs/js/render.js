@@ -174,7 +174,7 @@
     if (bag.type === "naifuku") {
       T("days", bag.days);
       let lastRow = null;
-      for (const k of ["powder", "capsule", "tablet"]) if (bag[k]) { T(k, bag[k]); lastRow = k; }
+      for (const k of ["powder", "capsule", "tablet"]) if (bag[k]) { T(k, bag[k], k === "powder" && bag.syrup ? { maxw: 260 } : null); lastRow = k; }
       if (bag.dose_note && F.dose_note) T("dose_note", bag.dose_note, { y: F[lastRow || "tablet"].y });
       (bag.timing || []).forEach(O);
       T("interval", bag.interval);
