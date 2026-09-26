@@ -10,7 +10,8 @@
       version: 1,
       settings: { gaiyouDefaultTimes: "2", yearFormat: "reiwa", paper: "bag", paperOffsetX: 0, paperOffsetY: 0, doctor: "" },
       // 医師（カルテの日付の横の印）。印の文字で見分け、医師ごとに字の癖・よく使う薬や部位を覚える
-      doctors: [{ id: "i", mark: "イ", name: "イ" }, { id: "k", mark: "K", name: "K" }, { id: "a", mark: "ア", name: "ア" }],
+      doctors: [{ id: "i", mark: "イ", name: "イ" }, { id: "k", mark: "K", name: "K" }, { id: "a", mark: "ア", name: "ア" },
+        { id: "n", mark: "N", name: "N", alt: ["√", "✓", "✔", "レ"] }],
       sizes: clone(D.layout.sizes),
       calibration: clone(D.layout.calibration),
       dataVersion: D.version,
@@ -57,6 +58,7 @@
     addBy(data.drugs, D.drugs, "name");
     addBy(data.sites, D.sites, "label");
     addBy(data.doctors, defaults().doctors, "mark");
+    for (const x of data.doctors) { const def = defaults().doctors.find(y => y.mark === x.mark); if (def && def.alt && !x.alt) x.alt = def.alt; }
     data.sets = data.sets || [];
     addBy(data.sets, D.sets || [], "name");
     for (const d of data.drugs) {                 // 初期データ側で増えた略称・印などを反映
@@ -64,6 +66,7 @@
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
       for (const k of ["common", "mix", "dose", "adopted", "syrup"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      if (def.fixedTimes) { d.fixedTimes = true; d.times = def.times; d.note = def.note; }   // 回数が決まっている薬（クレナフィン・ルコナック＝夜1回）
     }
     for (const s of data.sites) {
       const def = D.sites.find(x => x.label === s.label);

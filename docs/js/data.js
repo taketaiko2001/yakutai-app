@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 8,
+ "version": 9,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -864,26 +864,28 @@ window.DEFAULT_DATA = {
    "name": "クレナフィン爪外用液",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "くれなふぃん",
     "クレナフィン",
     "クレナフィンlo"
    ],
-   "note": "添付文書の用法: 1日1回",
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
    "adopted": true,
-   "common": true
+   "common": true,
+   "fixedTimes": true
   },
   {
    "name": "ルコナック爪外用液",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "るこなっく"
    ],
-   "note": "添付文書の用法: 1日1回",
-   "adopted": true
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
+   "adopted": true,
+   "fixedTimes": true
   },
   {
    "name": "フシジンレオ軟膏",
@@ -2459,6 +2461,15 @@ window.DEFAULT_DATA = {
     "顔首",
     "かおくび",
     "カオ・クビ"
+   ]
+  },
+  {
+   "label": "手の親指",
+   "aliases": [
+    "テノオヤユビ",
+    "手のおやゆび",
+    "手のオヤユビ",
+    "てのおやゆび"
    ]
   }
  ],

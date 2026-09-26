@@ -310,7 +310,9 @@
           lastGaiyou.site = site;
           lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "site");
           if (!sconf) lastGaiyou.uncertain.push("site");
-          const tk = timesToken(norm(line));
+          let tk = timesToken(norm(line));
+          const fx = lastGaiyou._drug && lastGaiyou._drug.fixedTimes;
+          if (fx) tk = null;
           if (tk) { lastGaiyou.times = tk; lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "times"); }
           else if (!lastGaiyou._timesFromLine && lastGaiyou._drug) {
             const st = siteTimes(lastGaiyou._drug, site);
@@ -466,6 +468,11 @@
       else { bag.times = String(defaultTimes); uns.add("times"); notes.push(`回数の記載なし → 既定の1日${defaultTimes}回`); }
     }
 
+    // 回数が決まっている薬（クレナフィン・ルコナックは必ず夜1回）：カルテの書き方によらずその回数
+    if (drug.fixedTimes && drug.times) {
+      bag.times = String(drug.times); bag._timesFromLine = true;
+    }
+
     let siteText = "";
     const pm = body.match(RE_PAREN);
     if (pm) siteText = pm[1];
@@ -498,12 +505,14 @@
 
   // 手・指だけに塗るときは、どの薬も1日数回（1日1回の薬＝ブイタマー・ドボベット・爪の薬・水虫の薬などはそのまま）。
   // 白色ワセリンを口に塗るときも1日数回
+  // 「おやゆび」は足の親指のことが多いので、「手」と書いていなければ手に含めない（1日2回）
   const RE_HAND = /手|指|ゆび|ユビ/, RE_NOT_HAND = /足|あし|首|くび|顔|かお|体|からだ|頭|あたま|全身|下肢|口|くち|鼻|はな|目/;
+  const RE_BIGTOE = /親指|おやゆび|オヤユビ/;
   function siteTimes(drug, site) {
     site = String(site || "");
     if (!site) return null;
     const fixed = String(drug.times || "");
-    if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "手に塗る薬 → 1日数回" };
+    if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && !(RE_BIGTOE.test(site) && !/手/.test(site)) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "手に塗る薬 → 1日数回" };
     if (/ワセリン/.test(drug.name) && /口|くち|クチ/.test(site)) return { times: "数", why: "口に塗る白色ワセリン → 1日数回" };
     return null;
   }

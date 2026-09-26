@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26f";
+const APP_VERSION = "2026-09-26g";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -46,7 +46,7 @@ function detectDoctor(rows) {
       if (!m) continue;
       const tail = m[1].replace(/[\d.]/g, "");
       if (!tail) continue;
-      const hit = Store.data.doctors.find(d => d.mark && tail.toLowerCase().includes(d.mark.normalize("NFKC").toLowerCase()));
+      const hit = Store.data.doctors.find(d => [d.mark, ...(d.alt || [])].some(k => k && tail.toLowerCase().includes(k.normalize("NFKC").toLowerCase())));
       if (hit) return hit.id;
     }
   }
@@ -610,7 +610,7 @@ function bindMenu() {
     const old = Store.data.doctors;
     Store.data.doctors = $("#doctorEdit").value.split("\n").map(l => l.trim().split(/\s+/)).filter(p => p[0]).map(p => {
       const same = old.find(x => x.mark === p[0]);
-      return { id: same ? same.id : "d" + Date.now() + Math.random().toString(36).slice(2, 6), mark: p[0], name: p.slice(1).join(" ") || p[0] };
+      return { id: same ? same.id : "d" + Date.now() + Math.random().toString(36).slice(2, 6), mark: p[0], name: p.slice(1).join(" ") || p[0], ...(same && same.alt ? { alt: same.alt } : {}) };
     });
     Store.save(); renderDoctors(); renderMenu(); toast("医師の一覧を保存しました");
   };
