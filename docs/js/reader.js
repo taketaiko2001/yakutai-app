@@ -13,7 +13,7 @@
   // 行の中の「回数」の書き方（カルテ → 印字）
   const TIMES_TOKENS = [["夜1", "夜1"], ["日1", "1"], ["日2", "2"], ["日3", "3"], ["数回", "数"]];
 
-  const P = { bonus: 1.0, common: 1.0, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
+  const P = { confMinN: 3, confExtra: 3.0, bonus: 1.0, common: 1.0, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
 
   function kata(s) {
     return String(s || "").normalize("NFKC").replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
@@ -37,7 +37,7 @@
   // learn: 学習データ（よく使う薬ほど選ばれやすくする）
   function buildLexicon(data, learn) {
     const drugs = [], sites = [];
-    const used = (learn && learn.drugCount) || {};
+    const used = (learn && learn.drugCount) || {}, usedSite = (learn && learn.siteCount) || {};
     const prior = d => (d.common ? P.common : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (used[d.name] || 0)));
     for (const d of data.drugs || []) {
       const emit = d.mix ? (d.aliases && d.aliases[0]) || d.name : d.name;
@@ -57,7 +57,7 @@
     for (const s of data.sites || []) {
       for (const w of new Set([s.label, ...(s.aliases || [])].flatMap(variants))) {
         const k = keyOf(w);
-        if (k.length >= 2) sites.push({ key: k, emit: s.label, prior: s.common ? P.common * 0.5 : 0 });   // 1文字（手・足など）は誤検出が多いので照合しない
+        if (k.length >= 2) sites.push({ key: k, emit: s.label, prior: (s.common ? P.common * 0.5 : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (usedSite[s.label] || 0))) });   // 1文字（手・足など）は誤検出が多いので照合しない
       }
     }
     const times = TIMES_TOKENS.map(([w, emit]) => ({ key: w, emit }));
@@ -81,6 +81,7 @@
     for (const [src, out] of Object.entries(FOLD)) add(out, src);
     return [...m.entries()].map(([out, set]) => [out, [...set]]);
   })();
+  const OUT_SRC = new Map(OUT_MAP);
   // 認識モデルの出力から残しておく文字（辞書の照合・数量や用法の読み取り・カタカナ優先の読み取りに使うもの）
   function keepChars(lex) {
     const set = new Set("0123456789×xXTDNnタ夕朝昼ネル前本錠包()（）-ー.,cgmlo夜日数回〃々");
@@ -111,18 +112,105 @@
     return seq;
   }
 
+  // ---------------------------------------------------------------- 医師ごとの字の癖
+  // 確認済みの行から「本当の文字 c が、どの文字 r と読まれたか」を数えておき（profile.conf[モデル][c][r]）、
+  // 照合のときに c の候補として r も（少しの減点で）認める。例: この先生の「ケ」は「ラ」と読まれやすい
+  function confMap(counts) {
+    const out = new Map();
+    for (const [c, rs] of Object.entries(counts || {})) {
+      const tot = Object.values(rs).reduce((a, b) => a + b, 0);
+      const m = new Map();
+      for (const [r, n] of Object.entries(rs)) {
+        if (r === c || n < P.confMinN) continue;
+        m.set(r, Math.max(-4, Math.min(-0.3, Math.log(n / tot))) - P.confExtra);
+      }
+      if (m.size) out.set(c, m);
+    }
+    return out;
+  }
+  // 照合する語 word の各文字について、見る列と減点
+  function labOf(m, word) {
+    const lab = [];
+    for (const c of word) {
+      const cols = [], pens = [];
+      for (const x of eqChars(c)) { const k = m.cols.get(x); if (k != null) { cols.push(k); pens.push(0); } }
+      const learned = m.conf && m.conf.get(c);
+      if (learned) for (const [r, pen] of learned) for (const x of OUT_SRC.get(r) || [r]) {
+        const k = m.cols.get(x);
+        if (k != null) { cols.push(k); pens.push(pen); }
+      }
+      if (!cols.length) return null;
+      lab.push({ ch: c, cols, pens });
+    }
+    return lab;
+  }
+  function labScore(m, off, l) {
+    let v = -1e9;
+    for (let k = 0; k < l.cols.length; k++) { const x = m.lp[off + l.cols[k]] + l.pens[k]; if (x > v) v = x; }
+    return v;
+  }
+  // 2つの文字列の対応（編集距離）から、置き換わった文字の組を取り出す
+  function alignPairs(a, b) {
+    const n = a.length, m = b.length;
+    const d = Array.from({ length: n + 1 }, (_, i) => { const r = new Array(m + 1).fill(0); r[0] = i; return r; });
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    const pairs = [];
+    let i = n, j = m;
+    while (i > 0 && j > 0) {
+      if (d[i][j] === d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)) { pairs.push([a[i - 1], b[j - 1]]); i--; j--; }
+      else if (d[i][j] === d[i - 1][j] + 1) i--;
+      else j--;
+    }
+    return pairs;
+  }
+  // 確認済みの1行（row）で、正しい語 key がどう読まれていたかを profile に数える
+  function learnKey(profile, row, key) {
+    profile.conf = profile.conf || {};
+    for (const w of ["A", "J", "B"]) {
+      const m = row[w];
+      if (!m || !m.T) continue;
+      const sp = (m.seq ? spotSeq : spot)(m, key);
+      if (!sp) continue;
+      const read = m.chars.filter(c => c.t >= sp.span[0] && c.t <= sp.span[1]).map(c => c.ch).join("");
+      if (!read) continue;
+      const cw = profile.conf[w] = profile.conf[w] || {};
+      for (const [c, r] of alignPairs(key, read)) { const x = cw[c] = cw[c] || {}; x[r] = (x[r] || 0) + 1; }
+    }
+    profile.n = (profile.n || 0) + 1;
+  }
+  // 確認済みの行（読み取った行と、最終的な「カルテの内容」の行）から、医師の癖を覚える
+  function learnRow(profile, row, finalLine, lex) {
+    const t = String(finalLine || "").replace(/\s*[?？]\s*$/, "").trim();
+    if (!t || t.startsWith("#")) return;
+    const pick = (entries, emit) => {
+      let best = null;
+      for (const e of entries) {
+        if (e.emit !== emit) continue;
+        for (const w of ["A", "J", "B"]) {
+          const m = row[w];
+          if (!m || !m.T) continue;
+          const sp = (m.seq ? spotSeq : spot)(m, e.key);
+          if (sp && (!best || sp.pen + e.key.length > best.s)) best = { s: sp.pen + e.key.length, key: e.key };
+        }
+      }
+      return best && best.key;
+    };
+    const d = lex.drugs.filter(e => t.startsWith(e.emit + " ") || t === e.emit).sort((a, b) => b.emit.length - a.emit.length)[0];
+    if (d) { const k = pick(lex.drugs, d.emit); if (k) learnKey(profile, row, k); }
+    const sm = t.match(/\(([^)〃]+)\)/);
+    if (sm) { const k = pick(lex.sites, sm[1].trim()); if (k) learnKey(profile, row, k); }
+  }
+
   // ---------------------------------------------------------------- 単語さがし（CTC）
   // m: { T, cols: Map(文字→列), K, lp: Float32Array(T*K) 各文字の対数確率, blank: Float32Array(T), max: Float32Array(T) }
   // word が行のどこか一部分として最も自然に当てはまるときの減点（0が最良）と、その区間 [t0, t1]
   function spot(m, word, from, to) {
     from = from || 0; to = to == null ? m.T : to;
     const L = word.length;
-    const lab = [];
-    for (const c of word) {
-      const cols = eqChars(c).map(x => m.cols.get(x)).filter(x => x != null);
-      if (!cols.length) return null;
-      lab.push(cols);
-    }
+    const lab = labOf(m, word);
+    if (!lab) return null;
     const S = 2 * L + 1, NEG = -1e9;
     let dp = new Float64Array(S).fill(NEG), st = new Int32Array(S);
     let nd = new Float64Array(S), ns = new Int32Array(S);
@@ -130,16 +218,12 @@
     const ls = new Float64Array(L);
     for (let t = from; t < to; t++) {
       const off = t * m.K, mx = m.max[t];
-      for (let i = 0; i < L; i++) {
-        let v = NEG;
-        for (const c of lab[i]) if (m.lp[off + c] > v) v = m.lp[off + c];
-        ls[i] = v - mx;
-      }
+      for (let i = 0; i < L; i++) ls[i] = labScore(m, off, lab[i]) - mx;
       const bl = m.blank[t] - mx;
       for (let s = 0; s < S; s++) {
         let v = dp[s], a = st[s];
         if (s >= 1 && dp[s - 1] > v) { v = dp[s - 1]; a = st[s - 1]; }
-        if (s >= 3 && s % 2 === 1 && lab[(s - 1) / 2] !== lab[(s - 3) / 2] && dp[s - 2] > v) { v = dp[s - 2]; a = st[s - 2]; }
+        if (s >= 3 && s % 2 === 1 && lab[(s - 1) / 2].ch !== lab[(s - 3) / 2].ch && dp[s - 2] > v) { v = dp[s - 2]; a = st[s - 2]; }
         if (s <= 1 && 0 > v) { v = 0; a = t; }         // どこからでも始めてよい
         nd[s] = v + (s % 2 === 0 ? bl : ls[(s - 1) / 2]);
         ns[s] = a;
@@ -155,12 +239,8 @@
   function spotSeq(m, word, from, to) {
     from = from || 0; to = to == null ? m.T : to;
     const L = word.length;
-    const lab = [];
-    for (const c of word) {
-      const cols = eqChars(c).map(x => m.cols.get(x)).filter(x => x != null);
-      if (!cols.length) return null;
-      lab.push(cols);
-    }
+    const lab = labOf(m, word);
+    if (!lab) return null;
     let prev = new Float64Array(L + 1), cur = new Float64Array(L + 1);
     let ps = new Int32Array(L + 1), cs = new Int32Array(L + 1);
     for (let j = 1; j <= L; j++) { prev[j] = j * SEQ.del; ps[j] = from; }
@@ -169,9 +249,7 @@
       const off = i * m.K, mx = m.max[i];
       cur[0] = 0; cs[0] = i + 1;
       for (let j = 1; j <= L; j++) {
-        let v = -Infinity;
-        for (const c of lab[j - 1]) if (m.lp[off + c] > v) v = m.lp[off + c];
-        const sub = Math.min(SEQ.subMax, mx - v);
+        const sub = Math.min(SEQ.subMax, mx - labScore(m, off, lab[j - 1]));
         let cost = prev[j - 1] + sub, st = j === 1 ? i : ps[j - 1];
         if (cur[j - 1] + SEQ.del < cost) { cost = cur[j - 1] + SEQ.del; st = cs[j - 1]; }
         if (j < L && prev[j] + SEQ.ins < cost) { cost = prev[j] + SEQ.ins; st = ps[j]; }
@@ -269,7 +347,15 @@
       [/([1-9])\s*包/, m => `${m[1]}包`],
       [/([1-9])\s*7/, m => `${m[1]}T`],
     ];
-    for (const [re, f] of pats) for (const t of ts) { const m = t.match(re); if (m) return { text: f(m) }; }
+    // 書き方ごとに、各モデルの読みを集めて多数決（同数なら小さいほう。本数の読みすぎで袋のサイズを誤らないように）
+    for (const [re, f] of pats) {
+      const got = ts.map(t => t.match(re)).filter(Boolean).map(f);
+      if (!got.length) continue;
+      const cnt = new Map();
+      got.forEach(g => cnt.set(g, (cnt.get(g) || 0) + 1));
+      const best = [...cnt.entries()].sort((a, b) => b[1] - a[1] || parseFloat(a[0].replace(/^-/, "")) - parseFloat(b[0].replace(/^-/, "")))[0][0];
+      return { text: best, sure: cnt.get(best) >= 2 };
+    }
     return null;
   }
 
@@ -304,7 +390,9 @@
       if (usage.times) parts.push(`${usage.times}×${usage.code}`);
       if (usage.days) parts.push(`${usage.days}TD`);
     }
-    const unsure = cand.score < P.drugSure * cand.wsum || guessed;
+    // 本数が多い（袋のサイズに関わる）のにモデル間で読みがそろわないときも確認してもらう
+    const bigQty = q && /^\d+本$/.test(q.text) && parseInt(q.text) >= 5 && !q.sure;
+    const unsure = cand.score < P.drugSure * cand.wsum || guessed || bigQty;
     return parts.join(" ") + (unsure ? " ？" : "");
   }
 
@@ -371,7 +459,8 @@
     m.chars = decodeKana(m);   // 表示・数量の読み取りには、カタカナ優先で読んだ文字を使う
     return m;
   }
-  function makeRows(items) {
+  // profile: その医師の癖（learnRow で覚えたもの。省略可）
+  function makeRows(items, profile) {
     items = items.slice().sort((a, b) => (a.top + a.bottom) - (b.top + b.bottom));
     const rows = [];
     for (const it of items) {
@@ -393,10 +482,11 @@
         return s.trim();
       };
       const J = r.items[0].J ? unpack(r.items.map(i => i.J)) : null;
+      if (profile && profile.conf) for (const [w, m] of [["A", A], ["J", J], ["B", B]]) if (m) m.conf = confMap(profile.conf[w]);
       return { ta: text(A, r.items.map(i => i.A)), tb: B && B.T ? text(B, r.items.map(i => i.B)) : (J ? text(J, r.items.map(i => i.J)) : ""), A, B: B && B.T ? B : null, J,
         box: { x: Math.min(...r.items.map(i => i.x)), x2: Math.max(...r.items.map(i => i.x2 != null ? i.x2 : i.x)), top: r.top, bottom: r.bottom } };
     });
   }
 
-  global.KarteReader = { buildLexicon, keepChars, spot, spotSeq, read, keyOf, makeRows, bestOf, rankOf, P };
+  global.KarteReader = { buildLexicon, keepChars, spot, spotSeq, read, learnRow, learnKey, alignPairs, keyOf, makeRows, bestOf, rankOf, P };
 })(typeof window !== "undefined" ? window : globalThis);

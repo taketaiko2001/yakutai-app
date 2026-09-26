@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-25e";
+const APP_VERSION = "2026-09-26";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -22,8 +22,60 @@ function busy(on, text) { $("#busy").hidden = !on; if (text) $("#busyText").text
 function today() { const d = new Date(); return { year: String(d.getFullYear() - 2018), month: String(d.getMonth() + 1), day: String(d.getDate()) }; }
 function ctx(allowUnknown) {
   const d = Store.data;
-  return { drugs: d.drugs, sites: d.sites, sets: d.sets || [], learn: d.learn, gaiyouDefaultTimes: d.settings.gaiyouDefaultTimes, allowUnknown };
+  return { drugs: d.drugs, sites: d.sites, sets: d.sets || [], learn: Store.learnFor(curDoctor()), gaiyouDefaultTimes: d.settings.gaiyouDefaultTimes, allowUnknown };
 }
+// ---------------------------------------------------------------- 医師
+function curDoctor() { const d = Store.data; return d.doctors.some(x => x.id === d.settings.doctor) ? d.settings.doctor : (d.doctors[0] || {}).id || ""; }
+function renderDoctors() {
+  const d = Store.data, cur = curDoctor();
+  $("#doctorChips").innerHTML = d.doctors.map(x => `<label class="chip"><input type="radio" name="doctor" value="${esc(x.id)}" ${x.id === cur ? "checked" : ""}><span>${esc(x.name)}</span></label>`).join("") +
+    `<label class="chip"><input type="radio" name="doctor" value="_" ${cur === "_" ? "checked" : ""}><span>その他</span></label>`;
+}
+function setDoctor(id, why) {
+  if (id === curDoctor()) return false;
+  Store.data.settings.doctor = id; Store.save(); renderDoctors();
+  const x = Store.data.doctors.find(d => d.id === id);
+  if (why) toast(`${why}「${x ? x.name : "その他"}」の字の癖で読み取りました（違っていれば上で選び直してください）`);
+  return true;
+}
+// 日付の行で、日付の後ろに医師の印（イ・K など）が読めればその医師
+function detectDoctor(rows) {
+  for (const r of rows) {
+    for (const t of [r.tb, r.ta]) {
+      const m = String(t || "").normalize("NFKC").match(/\d{1,2}\s*[.,/]\s*\d{1,2}\s*[.,/]\s*\d{1,2}\s*(\S{1,2})/);
+      if (!m) continue;
+      const tail = m[1].replace(/[\d.]/g, "");
+      if (!tail) continue;
+      const hit = Store.data.doctors.find(d => d.mark && tail.toLowerCase().includes(d.mark.normalize("NFKC").toLowerCase()));
+      if (hit) return hit.id;
+    }
+  }
+  return null;
+}
+// ---------------------------------------------------------------- 手書きの学習用データ（端末内の IndexedDB）
+const SampleDB = {
+  open() {
+    if (this._p) return this._p;
+    this._p = new Promise((res, rej) => {
+      const r = indexedDB.open("yakutai_samples", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("rows", { keyPath: "id", autoIncrement: true });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return this._p;
+  },
+  async tx(mode, fn) {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("rows", mode), st = t.objectStore("rows");
+      const out = fn(st);
+      t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error);
+    });
+  },
+  add(rows) { return this.tx("readwrite", st => { rows.forEach(r => st.add(r)); }); },
+  count() { return this.tx("readonly", st => st.count()); },
+  all() { return this.tx("readonly", st => st.getAll()); },
+  clear() { return this.tx("readwrite", st => st.clear()); },
+};
 function commonForPrint() {
   const y = toHalf(S.common.year);
   return { name: S.common.name.trim(), year_text: y ? (Store.data.settings.yearFormat === "number" ? y : "令和" + y) : "",
@@ -67,13 +119,19 @@ async function readPhoto() {
   busy(true, "読み取りの準備中…");
   try {
     const d = Store.data;
-    const lex = KarteReader.buildLexicon(d, d.learn);
+    const keep = KarteReader.keepChars(KarteReader.buildLexicon(d, d.learn));
     const t0 = performance.now();
-    const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), KarteReader.keepChars(lex), S.rect);
-    const rows = KarteReader.makeRows(items);
+    const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), keep, S.rect);
+    // 医師の印が読めたらその医師に切り替え、その医師の癖（よく使う薬・部位、読み違いの傾向）で判定する
+    const found = detectDoctor(KarteReader.makeRows(items));
+    if (found) setDoctor(found, "日付の横の印から");
+    const learn = Store.learnFor(curDoctor());
+    const lex = KarteReader.buildLexicon(d, learn);
+    const rows = KarteReader.makeRows(items, learn.hand);
     const lines = KarteReader.read(rows, lex);
+    S.lex = lex;
     applyOcrFix(lines);
-    S.readLines = lines.filter(l => l.kind !== "date").map(l => ({ text: l.text, cur: l.text, kind: l.kind, alts: l.alts, raw: rowRaw(l.row), img: cropRow(canvas, l.row.box) }));
+    S.readLines = lines.filter(l => l.kind !== "date").map(l => ({ text: l.text, cur: l.text, kind: l.kind, alts: l.alts, raw: rowRaw(l.row), img: cropRow(canvas, l.row.box), row: l.row }));
     const text = lines.map(l => l.text).join("\n");
     $("#karteText").value = text;
     S.ocrInitial = lines.map(l => ({ text: l.text, raw: rowRaw(l.row) }));
@@ -389,12 +447,20 @@ async function makePdfs() {
       S.pdfs.push({ label, count: group.length, file: new File([bytes], `薬袋_${label}_${ymd}.pdf`, { type: "application/pdf" }) });
     }
     Store.learnFrom(S.bags, S.ocrInitial, $("#karteText").value);
+    Store.learnDoctor(curDoctor(), S.bags, S.readLines, S.lex);
+    saveSamples();
     S.ocrInitial = [];
     renderHelpers();
     renderPdfResult();
   } catch (e) {
     $("#pdfResult").innerHTML = `<div class="res err">PDFを作れませんでした: ${esc(e.message)}</div>`;
   } finally { busy(false); }
+}
+// 確認して印刷した行の、手書きの切り抜きと正しい内容をためる（医師ごとの字の癖を学ぶ材料）
+function saveSamples() {
+  const doc = curDoctor(), t = Date.now();
+  const rows = S.readLines.filter(l => l.img && l.cur && !l.cur.startsWith("#")).map(l => ({ doctor: doc, text: l.cur.replace(/\s*[?？]\s*$/, ""), read: l.raw, img: l.img, t }));
+  if (rows.length) SampleDB.add(rows).catch(() => {});
 }
 function renderPdfResult() {
   $("#pdfResult").innerHTML = S.pdfs.map((p, i) => `<div class="res"><b>${esc(p.label)}</b>（${p.count}枚）をセットして印刷してください
@@ -456,6 +522,9 @@ function renderMenu() {
   })).join("");
   $("#sGaiyouTimes").value = st.gaiyouDefaultTimes; $("#sYear").value = st.yearFormat;
   const L = d.learn;
+  $("#doctorEdit").value = d.doctors.map(x => `${x.mark} ${x.name}`).join("\n");
+  $("#doctorInfo").textContent = d.doctors.map(x => `${x.name}: ${(d.learn.byDoctor[x.id] || { n: 0 }).n} 回分を学習`).join("、");
+  SampleDB.count().then(n => { $("#sampleInfo").textContent = `いまたまっている行: ${n} 行`; }).catch(() => { $("#sampleInfo").textContent = "この端末では保存できません"; });
   $("#learnInfo").textContent = `これまでに ${L.count || 0} 回分を学習（よく使う処方 ${Object.keys(L.presets).length} 件、読み違いの訂正 ${Object.keys(L.ocrFix).length} 件、袋サイズのルール ${d.rules.length} 件）`;
   $("#versionInfo").innerHTML = `バージョン ${APP_VERSION}<br>文字認識: PaddleOCR（PP-OCRv5・PP-OCRv4 日本語、Apache-2.0）、NDLOCR-Lite（国立国会図書館、CC BY 4.0）`;
 }
@@ -537,6 +606,27 @@ function bindMenu() {
     e.target.value = "";
   };
   $("#btnResetLearn").onclick = () => { if (confirm("学習した内容（よく使う処方・訂正・用法）を消しますか？（ルールとマスタは残ります）")) { Store.reset("learn"); renderMenu(); renderHelpers(); } };
+  $("#btnSaveDoctors").onclick = () => {
+    const old = Store.data.doctors;
+    Store.data.doctors = $("#doctorEdit").value.split("\n").map(l => l.trim().split(/\s+/)).filter(p => p[0]).map(p => {
+      const same = old.find(x => x.mark === p[0]);
+      return { id: same ? same.id : "d" + Date.now() + Math.random().toString(36).slice(2, 6), mark: p[0], name: p.slice(1).join(" ") || p[0] };
+    });
+    Store.save(); renderDoctors(); renderMenu(); toast("医師の一覧を保存しました");
+  };
+  $("#btnExportSamples").onclick = async () => {
+    const rows = await SampleDB.all();
+    if (!rows.length) return alert("まだたまっていません");
+    const docs = Object.fromEntries(Store.data.doctors.map(x => [x.id, x.name]));
+    const f = new File([JSON.stringify({ kind: "yakutai-handwriting", doctors: docs, rows }, null, 0)],
+      `薬袋プリント_手書き学習用_${new Date().toISOString().slice(0, 10)}.json`, { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f] }).catch(() => {});
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); }
+  };
+  $("#btnClearSamples").onclick = async () => {
+    if (!confirm("たまっている手書きの学習用データを消しますか？（書き出していない分は戻せません）")) return;
+    await SampleDB.clear(); renderMenu();
+  };
   $("#btnSaveOther").onclick = () => {
     Store.data.settings.gaiyouDefaultTimes = toHalf($("#sGaiyouTimes").value) || "2";
     Store.data.settings.yearFormat = $("#sYear").value;
@@ -583,7 +673,9 @@ function init() {
   $("#yt-css").textContent = YakutaiRender.pageCss(Store.layout());
   S.common = Object.assign({ name: "" }, today());
   renderHelpers();
+  renderDoctors();
   renderAll();
+  $("#doctorChips").addEventListener("change", e => { if (e.target.name === "doctor") setDoctor(e.target.value); });
 
   $("#camInput").onchange = e => setPhoto(e.target.files[0]);
   $("#fileInput").onchange = e => setPhoto(e.target.files[0]);

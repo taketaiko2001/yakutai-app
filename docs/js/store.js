@@ -8,7 +8,9 @@
   function defaults() {
     return {
       version: 1,
-      settings: { gaiyouDefaultTimes: "2", yearFormat: "reiwa", paper: "bag", paperOffsetX: 0, paperOffsetY: 0 },
+      settings: { gaiyouDefaultTimes: "2", yearFormat: "reiwa", paper: "bag", paperOffsetX: 0, paperOffsetY: 0, doctor: "" },
+      // 医師（カルテの日付の横の印）。印の文字で見分け、医師ごとに字の癖・よく使う薬や部位を覚える
+      doctors: [{ id: "i", mark: "イ", name: "イ" }, { id: "k", mark: "K", name: "K" }],
       sizes: clone(D.layout.sizes),
       calibration: clone(D.layout.calibration),
       dataVersion: D.version,
@@ -16,7 +18,7 @@
       sets: clone(D.sets || []),
       sites: clone(D.sites),
       rules: clone(D.rules),
-      learn: { presets: {}, usage: {}, gaiyou: {}, ocrFix: {}, drugCount: {}, count: 0 },
+      learn: { presets: {}, usage: {}, gaiyou: {}, ocrFix: {}, drugCount: {}, siteCount: {}, count: 0, byDoctor: {} },
     };
   }
   let data;
@@ -26,6 +28,7 @@
       data = raw ? Object.assign(defaults(), JSON.parse(raw)) : defaults();
     } catch (e) { data = defaults(); }
     data.learn = Object.assign(defaults().learn, data.learn || {});
+    if (!data.doctors) data.doctors = defaults().doctors;
     upgrade();
     return data;
   }
@@ -99,6 +102,43 @@
   // ---------------------------------------------------------------- 学習
   function bump(obj, key) { obj[key] = (obj[key] || 0) + 1; }
 
+  // ---------------------------------------------------------------- 医師ごとの学習
+  function doctorLearn(id) {
+    const B = data.learn.byDoctor = data.learn.byDoctor || {};
+    return B[id || "_"] = B[id || "_"] || { drugCount: {}, siteCount: {}, gaiyou: {}, hand: {}, n: 0 };
+  }
+  // 読み取り・解析に使う学習データ：全体の学習に、その医師の分を上乗せ（医師の分を重く）
+  function learnFor(id) {
+    const L = data.learn, P = id ? doctorLearn(id) : null;
+    if (!P) return L;
+    const add = (a, b, w) => { const o = Object.assign({}, a); for (const [k, v] of Object.entries(b || {})) o[k] = (o[k] || 0) + v * w; return o; };
+    const gaiyou = Object.assign({}, L.gaiyou);
+    for (const [name, g] of Object.entries(P.gaiyou || {})) {
+      const base = gaiyou[name] || { times: {}, site: {} };
+      gaiyou[name] = { times: add(base.times, g.times, 3), site: add(base.site, g.site, 3) };
+    }
+    return Object.assign({}, L, { drugCount: add(L.drugCount, P.drugCount, 3), siteCount: add(L.siteCount, P.siteCount, 3), gaiyou, hand: P.hand });
+  }
+  // 確定した内容を、その医師の学習データに足す（readLines: 読み取った行と最終的な行、lex: 照合用の一覧）
+  function learnDoctor(id, bags, readLines, lex) {
+    const P = doctorLearn(id);
+    P.n++;
+    for (const b of bags) {
+      const names = (b.drug_names || []).filter(n => n && n !== "（薬品名不明）");
+      for (const n of names) bump(P.drugCount, n);
+      if (b.site) { bump(P.siteCount, b.site); bump(data.learn.siteCount = data.learn.siteCount || {}, b.site); }
+      if (b.type === "gaiyou" && names.length) {
+        const g = P.gaiyou[names[0]] || (P.gaiyou[names[0]] = { times: {}, site: {} });
+        if (b.times) bump(g.times, b.times);
+        if (b.site) bump(g.site, b.site);
+      }
+    }
+    if (readLines && lex && global.KarteReader) {
+      for (const l of readLines) if (l.row && l.cur && !l.cur.startsWith("#")) global.KarteReader.learnRow(P.hand, l.row, l.cur, lex);
+    }
+    save();
+  }
+
   // 印刷を確定したときに呼ぶ。bags: 確定した袋、ocrInitial: 読み取り直後の行 [{text, raw}]（または文字列）、finalText: 確定時の内容
   function learnFrom(bags, ocrInitial, finalText) {
     const L = data.learn;
@@ -171,6 +211,6 @@
 
   load();
   global.Store = {
-    get data() { return data; }, save, layout, decideSize, ruleText, learnFrom, presets, exportJSON, importJSON, reset,
+    get data() { return data; }, save, layout, decideSize, ruleText, learnFrom, learnDoctor, learnFor, doctorLearn, presets, exportJSON, importJSON, reset,
   };
 })(window);

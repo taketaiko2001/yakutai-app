@@ -23,6 +23,7 @@
   <!-- ① 撮影 -->
   <section class="card">
     <h2><span class="num">1</span>カルテを撮影</h2>
+    <div class="doctor-bar"><span class="lbl">医師</span><span class="chips" id="doctorChips"></span></div>
     <div class="row2">
       <label class="btn primary big">
         <input type="file" accept="image/*" capture="environment" id="camInput" hidden>カメラで撮影
@@ -176,6 +177,21 @@
         <div id="calibBox"></div>
       </div>
       <button class="btn primary" id="btnSavePrint">保存</button>
+    </details>
+
+    <details>
+      <summary>医師（字の癖を医師ごとに覚えます）</summary>
+      <p class="note">1行に1人。「印 名前」（空白区切り）。印はカルテの日付の横に書かれる文字です（例: イ 市原先生）。読み取りのときに印が読めれば自動で切り替わります。</p>
+      <textarea id="doctorEdit" rows="4"></textarea>
+      <button class="btn primary" id="btnSaveDoctors">保存</button>
+      <p class="note" id="doctorInfo"></p>
+    </details>
+
+    <details>
+      <summary>手書きの学習用データ</summary>
+      <p class="note">確認して印刷した行の「手書きの切り抜き画像」と「正しい内容」を、医師ごとにこの端末へためています（患者さんの名前は含みません）。書き出したファイルを使うと、医師ごとの字の癖に合わせて読み取りを強くできます。</p>
+      <p class="note" id="sampleInfo"></p>
+      <div class="row2"><button class="btn" id="btnExportSamples">書き出す</button><button class="btn danger" id="btnClearSamples">消す</button></div>
     </details>
 
     <details>
