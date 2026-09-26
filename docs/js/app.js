@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26j";
+const APP_VERSION = "2026-09-26k";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -11,6 +11,7 @@ const NAIFUKU_FORMS = ["錠剤", "カプセル", "こな薬"];
 const S = {
   bags: [], common: { name: "", year: "", month: "", day: "" },
   photo: null, photoUrl: "", ocrInitial: "", pdfs: [],
+  pc: false,       // PC のサーバーから開いていて、PC の Claude で読めるか
   readLines: [],   // 読み取った行（写真の切り抜き・選び直し候補つき）
   rect: null,      // 読み取る範囲（写真の画素。null なら全体）
   doctor: "",      // 今の写真の医師（印から自動で判定）
@@ -114,6 +115,28 @@ async function readPhoto() {
     const d = Store.data;
     const keep = KarteReader.keepChars(KarteReader.buildLexicon(d, d.learn));
     const t0 = performance.now();
+    $("#sentBox").hidden = true;
+    // PC から開いているときは、処方の部分だけを PC の Claude に読ませる（読めなければスマホの中で読む）
+    if (S.pc) {
+      const r = await readViaPC().catch(e => { toast("PCで読めませんでした（" + e.message + "）。スマホの中で読みます"); return null; });
+      if (r) {
+        S.doctor = r.doctor;
+        S.readLines = []; S.ocrInitial = []; S.lex = null;
+        $("#karteText").value = r.text;
+        const res = KarteParser.parse(r.text, ctx(false));
+        applyParsed(res);
+        renderReadRows();
+        const dn = doctorName(S.doctor);
+        st.hidden = false; st.className = "status";
+        st.textContent = `PCのClaudeで読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。`;
+        if (Store.data.settings.autoPdf !== false && S.bags.length) {
+          busy(false);
+          if (await buildPdfs()) Store.learnConfident(S.bags, curDoctor());
+          tryAutoShare();
+        }
+        return;
+      }
+    }
     const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), keep, S.rect);
     // 医師の印が読めたらその医師に切り替え、その医師の癖（よく使う薬・部位、読み違いの傾向）で判定する
     S.doctor = detectDoctor(KarteReader.makeRows(items)) || "";
@@ -146,6 +169,28 @@ async function readPhoto() {
     st.hidden = false; st.className = "status warn";
     st.textContent = "読み取りできませんでした: " + e.message + "（②に手で入力しても使えます）";
   } finally { busy(false); }
+}
+
+// PC（院内の Wi-Fi）の Claude で読む。送るのは処方の部分だけ（日付の行より下の文字の行。ほかは白く消す）。
+// 日付の行が見つからないときは何も送らない（null を返し、スマホの中で読む）
+async function readViaPC() {
+  const { image, dateText } = await LocalOCR.prescriptionImage(S.photo, msg => busy(true, msg), S.rect);
+  if (!image) { toast("カルテの日付が見つからないので、PCには送らずスマホの中で読みます"); return null; }
+  const url = image.toDataURL("image/jpeg", 0.88);
+  $("#sentImg").src = url; $("#sentBox").hidden = false;
+  busy(true, "PCのClaudeで読んでいます…");
+  const blob = await (await fetch(url)).blob();
+  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.text) throw new Error(j.error || "PCから返事がありません");
+  const text = j.text.split("\n").map(s => s.replace(/^[-・*\s]+/, "").trim()).filter(Boolean).join("\n");
+  return { text, doctor: detectDoctor([{ ta: dateText, tb: dateText }]) || "" };
+}
+// PC のサーバーから開いているか（http のときだけ確かめる）
+async function checkPC() {
+  if (location.protocol !== "http:") return;
+  try { const r = await fetch("/api/ping"); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
+  if (S.pc) toast("PCで読むモードです（処方の部分だけをPCのClaudeで読みます）");
 }
 
 // 写真の上を指でなぞって、読み取る範囲を囲む
@@ -728,7 +773,7 @@ function init() {
   window.addEventListener("resize", schedulePreview);
 
   // 使う前に文字認識を裏で準備しておく
-  setTimeout(() => LocalOCR.init().catch(() => {}), 1500);
+  checkPC().then(() => setTimeout(() => LocalOCR.init(null, S.pc).catch(() => {}), 1500));
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 function emptyBag(type) {

@@ -10,28 +10,38 @@
   let det = null, recA = null, recJ = null, recN = null, dictA = null, dictJ = null, dictN = null, loading = null;
   const BASE = global.YAKUTAI_BASE || "";   // アプリのファイル置き場（テスト時だけ変える）
 
-  async function init(onProgress) {
-    if (det) return;
-    if (loading) return loading;
+  // lite: 文字の場所さがしと A だけ（PC で読むときに、日付の行を探すのに使う）
+  async function init(onProgress, lite) {
+    const ready = () => det && (lite || recN);
+    while (!ready() && loading) await loading.catch(() => {});
+    if (ready()) return;
     loading = (async () => {
       const ort = global.ort;
       ort.env.wasm.numThreads = 1;
       ort.env.wasm.wasmPaths = new URL(BASE + "lib/", location.href).href;
       onProgress && onProgress("文字認識の準備中…（初回のみ少し時間がかかります）");
       const opt = { executionProviders: ["wasm"], graphOptimizationLevel: "all" };
-      const [d, a, j, n, ta, tj, tn] = await Promise.all([
-        ort.InferenceSession.create(BASE + "models/det.onnx", opt),
-        ort.InferenceSession.create(BASE + "models/rec.onnx", opt),
+      if (!det) {
+        const [d, a, ta] = await Promise.all([
+          ort.InferenceSession.create(BASE + "models/det.onnx", opt),
+          ort.InferenceSession.create(BASE + "models/rec.onnx", opt),
+          fetch(BASE + "models/rec_dict.txt").then(x => x.text()),
+        ]);
+        recA = a;
+        dictA = ["", ...ta.split("\n"), " "];   // 0 = blank、末尾 = 空白
+        det = d;
+      }
+      if (lite || recN) return;
+      const [j, n, tj, tn] = await Promise.all([
         ort.InferenceSession.create(BASE + "models/recj.onnx", opt),
         ort.InferenceSession.create(BASE + "models/ndl.onnx", opt),
-        fetch(BASE + "models/rec_dict.txt").then(x => x.text()),
         fetch(BASE + "models/recj_dict.txt").then(x => x.text()),
         fetch(BASE + "models/ndl_chars.json").then(x => x.json()),
       ]);
-      det = d; recA = a; recJ = j; recN = n;
-      dictA = ["", ...ta.split("\n"), " "];   // 0 = blank、末尾 = 空白
+      recJ = j;
       dictJ = ["", ...tj.split("\n"), " "];
       dictN = ["", ...tn];                     // 0 = 終わりの印
+      recN = n;
     })();
     try { await loading; } finally { loading = null; }
   }
@@ -259,5 +269,48 @@
     return { canvas: src, items };
   }
 
-  global.LocalOCR = { init, recognize };
+  // PC（Claude）で読むときに送る画像を作る。患者さんの情報を送らないよう、処方の部分だけにする:
+  //  ・カルテの日付（8.9.26 など）の行を探し、その行より下だけを使う（氏名などの欄は日付より上・左にある）
+  //  ・文字の行（検出した枠）だけを写し、ほかは白で塗りつぶす
+  //  ・日付の行が見つからなければ何も作らない（送らない）
+  // 戻り値: { image: 送るキャンバス or null, dateText: 日付の行の文字（医師の印の判定用。送らない） }
+  async function prescriptionImage(img, onProgress, rect) {
+    await init(onProgress, true);
+    const src = toCanvas(img, 2400, 1440, rect);
+    onProgress && onProgress("処方の部分を探しています…");
+    const boxes = (await detect(src)).sort((a, b) => a.cy - b.cy);
+    const readA = async b => { const c = cropUpright(src, b); return c ? (await runRec(recA, dictA, [], [], recTensor(c))).seq.map(x => x.ch).join("").normalize("NFKC") : ""; };
+    const RE_DATE = /(?<!\d)\d{1,2}\s*[.,]\s*\d{1,2}\s*[.,]\s*\d{1,2}(?!\d)/;
+    let date = null, dateText = "";
+    for (let i = 0; i < Math.min(boxes.length, 25) && !date; i++) {
+      const b = boxes[i];
+      if (b.w < b.h * 1.5) continue;
+      const t = await readA(b);
+      if (RE_DATE.test(t)) { date = b; dateText = t; }
+    }
+    if (!date) return { image: null, dateText: "" };
+    // 日付と同じ行にある印（イ・K など）もつなげる（医師の判定用。送る画像には入れない）
+    const sameRow = b => b !== date && Math.min(b.y2, date.y2) - Math.max(b.y, date.y) > 0.4 * Math.min(b.y2 - b.y, date.y2 - date.y);
+    for (const b of boxes.filter(sameRow).filter(b => b.x >= date.x).sort((a, b) => a.x - b.x)) dateText += " " + await readA(b);
+    const left = date.x - 1.5 * (date.x2 - date.x);
+    const keep = boxes.filter(b => b !== date && !sameRow(b) && b.cy > date.y2 && b.cx >= left);
+    if (!keep.length) return { image: null, dateText };
+    const pad = b => 0.25 * (b.y2 - b.y);
+    const X0 = Math.max(0, Math.min(...keep.map(b => b.x - pad(b)))), Y0 = Math.max(0, Math.min(...keep.map(b => b.y - pad(b))));
+    const X1 = Math.min(src.width, Math.max(...keep.map(b => b.x2 + pad(b)))), Y1 = Math.min(src.height, Math.max(...keep.map(b => b.y2 + pad(b))));
+    // 長辺1600まで（読むのに十分で、送る量を減らす）
+    const s = Math.min(1, 1600 / Math.max(X1 - X0, Y1 - Y0));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round((X1 - X0) * s); cv.height = Math.round((Y1 - Y0) * s);
+    const ctx = cv.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    for (const b of keep) {
+      const p = pad(b), x = Math.max(0, b.x - p), y = Math.max(0, b.y - p), w = Math.min(src.width, b.x2 + p) - x, h = Math.min(src.height, b.y2 + p) - y;
+      ctx.drawImage(src, x, y, w, h, (x - X0) * s, (y - Y0) * s, w * s, h * s);
+    }
+    return { image: cv, dateText };
+  }
+
+  global.LocalOCR = { init, recognize, prescriptionImage };
 })(window);
