@@ -1,5 +1,5 @@
 // 一度読み込んだら電波がなくても使えるように、アプリのファイルを端末に保存する
-const CACHE = "yakutai-2026-09-26-9";
+const CACHE = "yakutai-2026-09-26-10";
 const FILES = [
   "./", "index.html", "css/app.css", "manifest.webmanifest",
   "js/data.js", "js/render.js", "js/parser.js", "js/reader.js", "js/store.js", "js/ocr.js", "js/pdf.js", "js/app.js",

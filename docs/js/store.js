@@ -66,6 +66,7 @@
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
       for (const k of ["common", "mix", "dose", "adopted", "syrup", "site"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      if (def.fixedUsage) d.fixedUsage = def.fixedUsage;   // 用法が決まっている内服（五苓散・十味敗毒湯＝食前、ビラスチン＝寝る前）
       if (def.fixedTimes) { d.fixedTimes = true; d.times = def.times; d.note = def.note; }   // 回数が決まっている薬（クレナフィン・ルコナック＝夜1回）
     }
     for (const s of data.sites) {

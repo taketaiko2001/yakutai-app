@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 10,
+ "version": 11,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -117,6 +117,7 @@ window.DEFAULT_DATA = {
   },
   {
    "name": "ビラノア錠",
+   "fixedUsage": {"times": "1", "timing": ["ねる前"], "meal": ""},
    "type": "naifuku",
    "form": "錠剤",
    "times": "",
@@ -361,6 +362,7 @@ window.DEFAULT_DATA = {
   },
   {
    "name": "十味敗毒湯エキス顆粒",
+   "fixedUsage": {"times": "2", "timing": ["朝", "夕"], "meal": "食前"},
    "type": "naifuku",
    "form": "こな薬",
    "times": "",
@@ -1589,6 +1591,7 @@ window.DEFAULT_DATA = {
   },
   {
    "name": "五苓散エキス顆粒",
+   "fixedUsage": {"times": "3", "timing": ["朝", "昼", "夕"], "meal": "食前"},
    "type": "naifuku",
    "form": "こな薬",
    "times": "",

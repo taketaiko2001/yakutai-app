@@ -419,6 +419,14 @@
       unsure.add("days"); notes.push("日数が読めません → よく使う日数");
     }
 
+    // 用法が決まっている薬（五苓散＝朝昼夕食前、十味敗毒湯＝朝夕食前、ビラスチン＝寝る前）は、書き方によらずその用法
+    const fixed = items.map(it => it.drug.fixedUsage).find(Boolean);
+    if (fixed && !usage.tonpuku) {
+      usage = Object.assign({}, usage, { times: fixed.times, timing: fixed.timing.slice(), meal: fixed.meal });
+      ["times", "timing", "meal"].forEach(k => unsure.delete(k));
+      for (let i = notes.length - 1; i >= 0; i--) if (/用法/.test(notes[i])) notes.splice(i, 1);
+      if (!usage.days) { usage.days = commonDays(items.map(it => it.drug.name), learn); unsure.add("days"); notes.push("日数が読めません → よく使う日数"); }
+    }
     if (usage.tonpuku) {
       bag.tonpuku = true;
       bag.tonpuku_count = usage.count || "";
@@ -540,16 +548,17 @@
   }
 
   // 手・指だけに塗るときは、どの薬も1日数回（1日1回の薬＝ブイタマー・ドボベット・爪の薬・水虫の薬などはそのまま）。
-  // 白色ワセリンを口に塗るときも1日数回
+  // 口（くちびる・口のまわり・鼻と口）に塗るときも、どの薬も1日数回
   // 「おやゆび」は足の親指のことが多いので、「手」と書いていなければ手に含めない（1日2回）
   const RE_HAND = /手|指|ゆび|ユビ/, RE_NOT_HAND = /足|あし|首|くび|顔|かお|体|からだ|頭|あたま|全身|下肢|口|くち|鼻|はな|目/;
   const RE_BIGTOE = /親指|おやゆび|オヤユビ/;
+  const RE_MOUTH = /口|くち|クチ/, RE_NOT_MOUTH = /足|あし|首|くび|顔|かお|体|からだ|頭|あたま|全身|下肢|手|目/;
   function siteTimes(drug, site) {
     site = String(site || "");
     if (!site) return null;
     const fixed = String(drug.times || "");
     if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && !(RE_BIGTOE.test(site) && !/手/.test(site)) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "手に塗る薬 → 1日数回" };
-    if (/ワセリン/.test(drug.name) && /口|くち|クチ/.test(site)) return { times: "数", why: "口に塗る白色ワセリン → 1日数回" };
+    if (RE_MOUTH.test(site) && !RE_NOT_MOUTH.test(site) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "口に塗る薬 → 1日数回" };
     return null;
   }
   function isDitto(s) { return /^\s*[〃々"″]+\s*$/.test(String(s || "")) || /^\s*同上\s*$/.test(String(s || "")); }
