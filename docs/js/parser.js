@@ -104,7 +104,7 @@
   const RE_COUNT = /(\d+)\s*回分|[×x]\s*(\d+)\s*回(?!\/)/;
   const RE_TIMES_1DAY = /1日\s*(\d)\s*回/;
   // 外用の回数:「夜1」「1日数回」「日2」「1日2回」
-  const RE_TIMES_ANY = /夜\s*1|1日\s*数\s*回|数回|1日\s*\d\s*回|(?<![\d.])日\s*\d(?!\d)/g;
+  const RE_TIMES_ANY = /夜\s*1|1日\s*数\s*回?|数回|(?<!\d)1日\s*\d\s*回?(?!\d)|(?<![\d.])日\s*\d(?!\d)/g;
   function timesToken(t) {
     const m = t.match(RE_TIMES_ANY);
     if (!m) return "";
@@ -118,6 +118,10 @@
   const RE_CONTAINERS = /(\d+(?:\.\d+)?)\s*(?:g|本)?\s*[×x]\s*(\d+)(?!\s*(?:回|日|td))/;  // 混合容器「3×2」= 3番の容器を2個
   const RE_PAREN = /[(（]\s*([^)）]*)[)）]?/;
   const RE_RP = /^\s*[^\s(（]{1,3}\)\s*/;   // 「Rp)」とそのOCR読み違い
+  // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)）。部位ではないので読み飛ばす
+  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ)\s*[)）]?/g;
+  // 処置の欄（「(S) B-1」など）。院内で使う薬なので薬袋にしない。次の「Rp)」か「・」の行まで読み飛ばす
+  const RE_SHOCHI = /^\s*(?:[(（]\s*[SＳsｓ]\s*[)）]|[Ⓢⓢ]|処置)/;
   const RE_BULLET = /^[\s・･.\-‐ー—*]+/;
   const RE_JP2 = /[぀-ヿ一-鿿]{2,}/;
 
@@ -214,9 +218,18 @@
     };
 
     const lines = String(text || "").split(/\r?\n/);
+    let inShochi = false;
     for (let raw of lines) {
       let line = raw.trim();
       if (!line || line.startsWith("#")) continue;
+      line = line.replace(RE_MAKER_NOTE, " ").replace(/\s+/g, " ").trim();
+      if (!line || RE_BULLET.test(line) && !line.replace(RE_BULLET, "")) continue;
+      if (RE_SHOCHI.test(norm(line))) { inShochi = true; res.ignored.push(line); continue; }
+      if (inShochi) {
+        const n = norm(line);
+        if ((RE_RP.test(n) && !/^\s*[(（]/.test(n)) || /^\s*[・･\-‐ー—*]/.test(n)) inShochi = false;
+        else { res.ignored.push(line); continue; }
+      }
 
       // 過去の訂正で覚えた読み違い → 訂正後の行に置き換える
       let fromLearn = false;

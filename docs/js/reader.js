@@ -400,6 +400,7 @@
 
   // rows: makeRows の結果（上から順）。lex: buildLexicon の結果。
   // 戻り値: 行ごとの { kind, text, alts: [{label, text}]（選び直し候補）, row }
+  const RE_QTY_HINT = /\d\s*[本木末平年T丁]|[-ー~]\s*[1-4](?![\d.])|\d\s*g(?![a-z])/;
   function read(rows, lex) {
     let dateIdx = -1, dateVal = -1;
     const lines = rows.map((row, i) => {
@@ -420,6 +421,11 @@
       const drugAlts = drugs.map(c => ({ label: c.e.emit, text: composeDrug(row, c, lex, usage) }));
       if (drugs.length && drugs[0].score >= P.drugMin * drugs[0].wsum) {
         return { kind: "drug", text: drugAlts[0].text, alts: drugAlts, row };
+      }
+      // 点数は低くても「2本」「3T」「-3」のような数量が読めた行は薬の行とみて、いちばん近い薬を「？」付きで出す（候補から選び直せる）
+      if (drugs.length && !usage.times && RE_QTY_HINT.test(ta + " " + tb)) {
+        const t = drugAlts[0].text;
+        return { kind: "drug", text: /[?？]\s*$/.test(t) ? t : t + " ？", alts: drugAlts, row, guess: true };
       }
       if (usage.times) {
         return { kind: "usage", text: `${usage.times}×${usage.code}` + (usage.days ? ` ${usage.days}TD` : ""), alts: drugAlts, row };

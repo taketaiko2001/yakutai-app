@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 5,
+ "version": 6,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -514,10 +514,12 @@ window.DEFAULT_DATA = {
    "times": "2",
    "aliases": [
     "ロコイドo",
-    "ろこいど"
+    "ろこいど",
+    "ロコイド"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "クロベタゾン酪酸エステル軟膏",
@@ -545,10 +547,13 @@ window.DEFAULT_DATA = {
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
-    "あんてべーと"
+    "あんてべーと",
+    "アンテベートo",
+    "アンテベート"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "マイザー軟膏",
@@ -575,7 +580,8 @@ window.DEFAULT_DATA = {
     "クロベタゾール軟膏"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "プロトピック軟膏",
@@ -594,10 +600,13 @@ window.DEFAULT_DATA = {
    "form": "ぬり薬",
    "times": "2",
    "aliases": [
-    "これくちむ"
+    "これくちむ",
+    "コレクチムo",
+    "コレクチム"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "モイゼルト軟膏",
@@ -743,7 +752,9 @@ window.DEFAULT_DATA = {
     "ダーT",
     "ダラシンTlo",
     "ダラシンT",
-    "だらしんてぃー"
+    "だらしんてぃー",
+    "ダTlo",
+    "ダT"
    ],
    "note": "",
    "common": true,
@@ -1028,7 +1039,9 @@ window.DEFAULT_DATA = {
    "times": "1",
    "aliases": [
     "ベピオウォッシュ",
-    "べぴおうぉっしゅ"
+    "べぴおうぉっしゅ",
+    "ベピオwa",
+    "ベピオワ"
    ],
    "note": "添付文書の用法: 1日1回",
    "common": true,
@@ -1321,11 +1334,12 @@ window.DEFAULT_DATA = {
    "times": "",
    "aliases": [
     "セフポドキシム",
-    "バナン",
-    "バナン錠"
+    "バナン錠",
+    "セフポ"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "ネイリンカプセル",
@@ -1435,7 +1449,8 @@ window.DEFAULT_DATA = {
     "よくいにん"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "リザベンカプセル",
@@ -1685,10 +1700,13 @@ window.DEFAULT_DATA = {
     "クロ(P)cn",
     "クロPcn",
     "デルモベートクリーム",
-    "デルモcn"
+    "デルモcn",
+    "クロPcr",
+    "クロ(P)cr"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "コムクロシャンプー",
@@ -1833,10 +1851,14 @@ window.DEFAULT_DATA = {
    "times": "2",
    "aliases": [
     "ネオメドロール",
-    "ねおめどろーる"
+    "ねおめどろーる",
+    "NMEEo",
+    "NMEE",
+    "NMEEO"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "バラマイシン軟膏",
@@ -1936,7 +1958,8 @@ window.DEFAULT_DATA = {
     "ぼあら"
    ],
    "note": "",
-   "adopted": true
+   "adopted": true,
+   "common": true
   },
   {
    "name": "ボチシート",
@@ -2273,6 +2296,93 @@ window.DEFAULT_DATA = {
    "aliases": [
     "カオ",
     "顔"
+   ]
+  },
+  {
+   "label": "キズ",
+   "aliases": [
+    "きず",
+    "傷"
+   ],
+   "common": true
+  },
+  {
+   "label": "目のまわり",
+   "aliases": [
+    "メノマワリ",
+    "めのまわり",
+    "目の周り",
+    "目まわり"
+   ]
+  },
+  {
+   "label": "手足",
+   "aliases": [
+    "テアシ",
+    "てあし"
+   ]
+  },
+  {
+   "label": "体・頭",
+   "aliases": [
+    "カラダアタマ",
+    "体アタマ",
+    "体頭",
+    "からだあたま"
+   ]
+  },
+  {
+   "label": "鼻・口わるいところ",
+   "aliases": [
+    "ハナクチワルイトコロ",
+    "ハナ・クチワルイトコロ",
+    "鼻口わるいところ",
+    "はなくちわるいところ"
+   ]
+  },
+  {
+   "label": "手わるいところ",
+   "aliases": [
+    "テワルイトコロ",
+    "手ワルイトコロ",
+    "てわるいところ"
+   ]
+  },
+  {
+   "label": "首・手",
+   "aliases": [
+    "クビテ",
+    "首手",
+    "くびて"
+   ]
+  },
+  {
+   "label": "顔よいところ",
+   "aliases": [
+    "カオヨイトコロ",
+    "顔ヨイトコロ",
+    "顔良いところ",
+    "顔よい時",
+    "かおよいところ",
+    "カオヨイトキ"
+   ]
+  },
+  {
+   "label": "くちよいとき",
+   "aliases": [
+    "クチヨイトキ",
+    "口よいとき",
+    "口良い時",
+    "クチヨイトコロ"
+   ]
+  },
+  {
+   "label": "くちまわり",
+   "aliases": [
+    "クチマワリ",
+    "口まわり",
+    "口のまわり",
+    "くちのまわり"
    ]
   }
  ],
