@@ -309,6 +309,10 @@
           if (!sconf) lastGaiyou.uncertain.push("site");
           const tk = timesToken(norm(line));
           if (tk) { lastGaiyou.times = tk; lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "times"); }
+          else if (!lastGaiyou._timesFromLine && lastGaiyou._drug) {
+            const st = siteTimes(lastGaiyou._drug, site);
+            if (st) { lastGaiyou.times = st.times; lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "times"); lastGaiyou.comment = [lastGaiyou.comment, st.why].filter(Boolean).join("・"); }
+          }
           out[out.length - 1] += ` (${site})` + (tk ? " " + timesLabel(tk) : "");
           continue;
         }
@@ -353,7 +357,14 @@
       }
     }
     flush({}, ["times", "days"]);
-    res.bags.forEach(b => { delete b._timesFromLine; delete b._ditto; });
+    res.bags.forEach(b => {
+      // 処置の欄の薬は、数量も部位も書かれない
+      if (b.type === "gaiyou" && !b.qty && !b.containers && !b.site && !b._ditto && !b.unknown_drug) {
+        if (!b.uncertain.includes("drugs")) b.uncertain.push("drugs");
+        b.comment = ["数量も部位もない行です（処置の欄なら、この行は消してください）", b.comment].filter(Boolean).join("・");
+      }
+      delete b._timesFromLine; delete b._ditto; delete b._drug;
+    });
     res.text = out.join("\n");
     return res;
   }
@@ -424,6 +435,7 @@
     const bag = emptyBag("gaiyou");
     bag.containerNo = 0;
     bag.drug_names = [drug.name];
+    bag._drug = drug;
     bag.source = line;
     bag.kind = GAIYOU_KINDS.includes(drug.form) ? drug.form : "ぬり薬";
     bag.qty = qty; bag.unit = unit;
@@ -470,12 +482,28 @@
       const lu = learnedGaiyou(drug.name, learn);
       if (lu && lu.site) { bag.site = lu.site; uns.add("site"); notes.push("部位の記載なし → よく使う部位"); }
     }
+    // 塗る場所で回数が決まるもの（カルテに回数が書いてあればそちらを優先）
+    if (!bag._timesFromLine) {
+      const st = siteTimes(drug, bag.site);
+      if (st && st.times !== bag.times) { bag.times = st.times; uns.delete("times"); notes.push(st.why); }
+    }
     if (drug.note) notes.push(drug.note);
     bag.uncertain = [...uns].sort();
     bag.comment = notes.join("・");
     return bag;
   }
 
+  // 手・指だけに塗るときは、どの薬も1日数回（1日1回の薬＝ブイタマー・ドボベット・爪の薬・水虫の薬などはそのまま）。
+  // 白色ワセリンを口に塗るときも1日数回
+  const RE_HAND = /手|指|ゆび|ユビ/, RE_NOT_HAND = /足|あし|首|くび|顔|かお|体|からだ|頭|あたま|全身|下肢|口|くち|鼻|はな|目/;
+  function siteTimes(drug, site) {
+    site = String(site || "");
+    if (!site) return null;
+    const fixed = String(drug.times || "");
+    if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "手に塗る薬 → 1日数回" };
+    if (/ワセリン/.test(drug.name) && /口|くち|クチ/.test(site)) return { times: "数", why: "口に塗る白色ワセリン → 1日数回" };
+    return null;
+  }
   function isDitto(s) { return /^\s*[〃々"″]+\s*$/.test(String(s || "")) || /^\s*同上\s*$/.test(String(s || "")); }
   function timesLabel(tk) { return tk === "夜1" ? "夜1" : tk === "数" ? "1日数回" : `1日${tk}回`; }
   // 同じ部位（〃）の薬を1つの袋にまとめる
