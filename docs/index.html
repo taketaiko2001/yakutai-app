@@ -23,7 +23,6 @@
   <!-- ① 撮影 -->
   <section class="card">
     <h2><span class="num">1</span>カルテを撮影</h2>
-    <div class="doctor-bar"><span class="lbl">医師</span><span class="chips" id="doctorChips"></span></div>
     <div class="row2">
       <label class="btn primary big">
         <input type="file" accept="image/*" capture="environment" id="camInput" hidden>カメラで撮影
@@ -43,6 +42,7 @@
       <p class="note" id="selNote" hidden>写真の上を指でなぞって、<b>今回の処方の部分</b>（日付から最後の薬まで）を四角く囲んでください。囲んだ部分だけを大きく読み取ります。</p>
     </div>
     <p class="status" id="ocrStatus" hidden></p>
+    <div id="quickPrint"></div>
   </section>
 
   <!-- ② カルテの内容 -->
@@ -94,8 +94,7 @@
     <h2><span class="num">4</span>印刷</h2>
     <p class="note">印刷されるのは<b>黒い文字と丸だけ</b>です（プレビューの薄い図は位置の目安）。</p>
     <div class="previews" id="previewList"></div>
-    <label class="check"><input type="checkbox" id="chkVerified"> カルテと照合し、内容を確認しました</label>
-    <button class="btn primary wide" id="btnPdf" disabled>印刷用PDFを作る</button>
+    <button class="btn primary wide" id="btnPdf" disabled>直した内容で印刷用PDFを作り直す</button>
     <div id="pdfResult"></div>
     <button class="btn wide ghost" id="btnNext">次の患者へ（クリア）</button>
   </section>
@@ -181,7 +180,7 @@
 
     <details>
       <summary>医師（字の癖を医師ごとに覚えます）</summary>
-      <p class="note">1行に1人。「印 名前」（空白区切り）。印はカルテの日付の横に書かれる文字です（例: イ 市原先生）。読み取りのときに印が読めれば自動で切り替わります。</p>
+      <p class="note">1行に1人。「印 名前」（空白区切り）。印はカルテの日付の横に書かれる文字です（例: イ 市原先生）。読み取りのときに印から自動で見分けます（選ぶ操作はいりません）。</p>
       <textarea id="doctorEdit" rows="4"></textarea>
       <button class="btn primary" id="btnSaveDoctors">保存</button>
       <p class="note" id="doctorInfo"></p>
@@ -206,6 +205,7 @@
     <details>
       <summary>その他</summary>
       <div class="field"><b>外用薬で回数が書いていない薬の1日回数（薬品マスタに回数がない場合）</b><input id="sGaiyouTimes" inputmode="numeric"></div>
+      <div class="field"><label class="check"><input type="checkbox" id="sAutoPdf"> 読み取ったらすぐ印刷用PDFを作る（おすすめ）</label></div>
       <div class="field"><b>年の書き方</b><select id="sYear"><option value="reiwa">令和8 年</option><option value="number">8 年</option></select></div>
       <button class="btn primary" id="btnSaveOther">保存</button>
       <p class="note" id="versionInfo"></p>

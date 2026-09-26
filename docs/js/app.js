@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26g";
+const APP_VERSION = "2026-09-26h";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -13,6 +13,7 @@ const S = {
   photo: null, photoUrl: "", ocrInitial: "", pdfs: [],
   readLines: [],   // 読み取った行（写真の切り抜き・選び直し候補つき）
   rect: null,      // 読み取る範囲（写真の画素。null なら全体）
+  doctor: "",      // 今の写真の医師（印から自動で判定）
 };
 
 // ---------------------------------------------------------------- 共通
@@ -25,19 +26,10 @@ function ctx(allowUnknown) {
   return { drugs: d.drugs, sites: d.sites, sets: d.sets || [], learn: Store.learnFor(curDoctor()), gaiyouDefaultTimes: d.settings.gaiyouDefaultTimes, allowUnknown };
 }
 // ---------------------------------------------------------------- 医師
-function curDoctor() { const d = Store.data; return d.doctors.some(x => x.id === d.settings.doctor) ? d.settings.doctor : (d.doctors[0] || {}).id || ""; }
-function renderDoctors() {
-  const d = Store.data, cur = curDoctor();
-  $("#doctorChips").innerHTML = d.doctors.map(x => `<label class="chip"><input type="radio" name="doctor" value="${esc(x.id)}" ${x.id === cur ? "checked" : ""}><span>${esc(x.name)}</span></label>`).join("") +
-    `<label class="chip"><input type="radio" name="doctor" value="_" ${cur === "_" ? "checked" : ""}><span>その他</span></label>`;
-}
-function setDoctor(id, why) {
-  if (id === curDoctor()) return false;
-  Store.data.settings.doctor = id; Store.save(); renderDoctors();
-  const x = Store.data.doctors.find(d => d.id === id);
-  if (why) toast(`${why}「${x ? x.name : "その他"}」の字の癖で読み取りました（違っていれば上で選び直してください）`);
-  return true;
-}
+// 画面で選ぶ操作はなし。読み取るたびに、日付の横の印（イ・K・ア・N など）から自動で決める。
+// 印が読めなければ医師を決めずに（全員分の学習で）読む
+function curDoctor() { return S.doctor || ""; }
+function doctorName(id) { const x = Store.data.doctors.find(d => d.id === id); return x ? x.name : ""; }
 // 日付の行で、日付の後ろに医師の印（イ・K など）が読めればその医師
 function detectDoctor(rows) {
   for (const r of rows) {
@@ -109,6 +101,7 @@ async function setPhoto(fileOrBlob) {
   S.photoUrl = URL.createObjectURL(fileOrBlob);
   $("#photo").src = S.photoUrl;
   S.rect = null; $("#photoSel").hidden = true; endSelect();
+  S.pdfs = []; S.doctor = ""; renderPdfResult();
   $("#photoBig").src = S.photoUrl;
   $("#photoBox").hidden = false;
   await readPhoto();
@@ -123,8 +116,7 @@ async function readPhoto() {
     const t0 = performance.now();
     const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), keep, S.rect);
     // 医師の印が読めたらその医師に切り替え、その医師の癖（よく使う薬・部位、読み違いの傾向）で判定する
-    const found = detectDoctor(KarteReader.makeRows(items));
-    if (found) setDoctor(found, "日付の横の印から");
+    S.doctor = detectDoctor(KarteReader.makeRows(items)) || "";
     const learn = Store.learnFor(curDoctor());
     const lex = KarteReader.buildLexicon(d, learn);
     const rows = KarteReader.makeRows(items, learn.hand);
@@ -141,9 +133,11 @@ async function readPhoto() {
     const unsure = lines.filter(l => l.kind === "raw" || /？$/.test(l.text)).length;
     st.hidden = false;
     st.className = "status" + (unsure ? " warn" : "");
-    st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分）。` +
-      (unsure ? `自信のない行が ${unsure} 行あります。下の「読み取った行」で写真と見比べ、違っていれば候補をタップしてください。` : "写真と見比べて確認してください。") +
-      (S.rect ? "" : "（「範囲を囲んで読み直す」で今回の処方の部分だけを囲むと、精度が上がることがあります）");
+    const dn = doctorName(S.doctor);
+    st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。` +
+      (unsure ? `自信のない行が ${unsure} 行あります（印刷した袋をカルテと見比べてください。直すときは下の「読み取った行」で）。` : "");
+    // 読み取ったらそのまま印刷用PDFまで作る（操作なしで印刷へ）
+    if (Store.data.settings.autoPdf !== false && S.bags.length) { busy(false); await buildPdfs(); tryAutoShare(); }
   } catch (e) {
     st.hidden = false; st.className = "status warn";
     st.textContent = "読み取りできませんでした: " + e.message + "（②に手で入力しても使えます）";
@@ -247,8 +241,7 @@ function applyParsed(res) {
     const dec = Store.decideSize(b);
     return Object.assign(b, { size: dec.size, sizeReason: dec.reason });
   });
-  $("#chkVerified").checked = false;
-  S.pdfs = []; $("#pdfResult").innerHTML = "";
+  S.pdfs = []; renderPdfResult();   // 内容が変わったら、前に作ったPDFは使わない
   renderAll();
 }
 function insertToken(token, newLine) {
@@ -407,10 +400,13 @@ function renderPreview() {
       <div class="pv-frame" style="width:${(sz.width_mm * PX_PER_MM * scale).toFixed(1)}px;height:${(sz.height_mm * PX_PER_MM * scale).toFixed(1)}px">
       <div class="pv-inner" style="transform:scale(${scale.toFixed(4)})">${YakutaiRender.renderPage(b, common, L, { art: true, noOffset: true })}</div></div></div>`;
   }).join("");
+  if (S.pdfs.length && S.pdfSig !== pdfSig()) { S.pdfs = []; renderPdfResult(); }
   updatePdfButton();
 }
 function renderAll() { renderBags(); renderPreview(); }
-function updatePdfButton() { $("#btnPdf").disabled = !(S.bags.length && $("#chkVerified").checked); }
+// 袋の内容を直したら、前に作ったPDF（直す前の内容）は印刷させない
+function pdfSig() { return JSON.stringify([S.bags, S.common]); }
+function updatePdfButton() { $("#btnPdf").disabled = !S.bags.length; }
 
 function problems() {
   const p = [];
@@ -431,9 +427,17 @@ function paperOpt() {
   const [w, h] = PAPERS[st.paper];
   return { paper: { w, h, ox: +st.paperOffsetX || 0, oy: +st.paperOffsetY || 0 } };
 }
+// 直してから「作り直す」ときだけ学習する（読み取っただけの内容は、間違いを覚えないよう学習しない）
 async function makePdfs() {
-  const p = problems();
-  if (p.length && !confirm("確認してください:\n・" + p.join("\n・") + "\n\nこのまま作りますか？")) return;
+  if (!(await buildPdfs())) return;
+  Store.learnFrom(S.bags, S.ocrInitial, $("#karteText").value);
+  Store.learnDoctor(curDoctor(), S.bags, S.readLines, S.lex);
+  saveSamples();
+  S.ocrInitial = [];
+  renderHelpers();
+  tryAutoShare();
+}
+async function buildPdfs() {
   busy(true, "PDFを作っています…");
   try {
     const L = Store.layout(), common = commonForPrint(), stamp = new Date();
@@ -446,15 +450,19 @@ async function makePdfs() {
       const label = size === "A5" ? "大きい袋" : "小さい袋";
       S.pdfs.push({ label, count: group.length, file: new File([bytes], `薬袋_${label}_${ymd}.pdf`, { type: "application/pdf" }) });
     }
-    Store.learnFrom(S.bags, S.ocrInitial, $("#karteText").value);
-    Store.learnDoctor(curDoctor(), S.bags, S.readLines, S.lex);
-    saveSamples();
-    S.ocrInitial = [];
-    renderHelpers();
+    S.pdfSig = pdfSig();
     renderPdfResult();
+    return true;
   } catch (e) {
-    $("#pdfResult").innerHTML = `<div class="res err">PDFを作れませんでした: ${esc(e.message)}</div>`;
+    $("#quickPrint").innerHTML = $("#pdfResult").innerHTML = `<div class="res err">PDFを作れませんでした: ${esc(e.message)}</div>`;
+    return false;
   } finally { busy(false); }
+}
+// 袋が1種類だけなら、そのまま印刷（共有）画面を開いてみる（端末が許さないときは「印刷」ボタンを1回押す）
+function tryAutoShare() {
+  if (S.pdfs.length !== 1) return;
+  const f = S.pdfs[0].file;
+  if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f], title: f.name }).catch(() => {});
 }
 // 確認して印刷した行の、手書きの切り抜きと正しい内容をためる（医師ごとの字の癖を学ぶ材料）
 function saveSamples() {
@@ -463,9 +471,10 @@ function saveSamples() {
   if (rows.length) SampleDB.add(rows).catch(() => {});
 }
 function renderPdfResult() {
-  $("#pdfResult").innerHTML = S.pdfs.map((p, i) => `<div class="res"><b>${esc(p.label)}</b>（${p.count}枚）をセットして印刷してください
-    <div class="row2"><button class="btn primary" data-share="${i}">印刷・共有</button><button class="btn" data-open="${i}">開く／保存</button></div></div>`).join("") +
-    `<p class="note">「印刷・共有」でプリンター（またはプリンターのアプリ）を選びます。用紙サイズは袋に合わせ、倍率は「100%（実際のサイズ）」にしてください。</p>`;
+  const html = S.pdfs.map((p, i) => `<div class="res"><b>${esc(p.label)}</b>（${p.count}枚）をセットして
+    <div class="row2"><button class="btn primary big" data-share="${i}">印刷</button><button class="btn" data-open="${i}">開く／保存</button></div></div>`).join("");
+  $("#quickPrint").innerHTML = html;
+  $("#pdfResult").innerHTML = html + (S.pdfs.length ? `<p class="note">「印刷」でプリンター（またはプリンターのアプリ）を選びます。用紙サイズは袋に合わせ、倍率は「100%（実際のサイズ）」にしてください。</p>` : "");
 }
 async function sharePdf(i) {
   const f = S.pdfs[i].file;
@@ -482,12 +491,11 @@ function openPdf(i) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 function clearAll() {
-  if (!confirm("次の患者に進みます。入力内容と写真を消しますか？")) return;
   S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = []; S.readLines = []; S.rect = null;
   renderReadRows();
   S.common = Object.assign({ name: "" }, today());
   $("#karteText").value = ""; $("#photoBox").hidden = true; $("#ocrStatus").hidden = true;
-  $("#chkVerified").checked = false; $("#pdfResult").innerHTML = "";
+  $("#pdfResult").innerHTML = $("#quickPrint").innerHTML = ""; S.doctor = "";
   $("#camInput").value = ""; $("#fileInput").value = "";
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -520,7 +528,7 @@ function renderMenu() {
       <div class="row2"><label>X <input type="number" step="0.5" data-c="dx" value="${c.dx}"></label><label>Y <input type="number" step="0.5" data-c="dy" value="${c.dy}"></label></div>
       <div class="row2"><button class="btn tiny" data-test="0">テスト印刷（実物用）</button><button class="btn tiny" data-test="1">図柄つき（普通紙用）</button></div></div>`;
   })).join("");
-  $("#sGaiyouTimes").value = st.gaiyouDefaultTimes; $("#sYear").value = st.yearFormat;
+  $("#sGaiyouTimes").value = st.gaiyouDefaultTimes; $("#sYear").value = st.yearFormat; $("#sAutoPdf").checked = st.autoPdf !== false;
   const L = d.learn;
   $("#doctorEdit").value = d.doctors.map(x => `${x.mark} ${x.name}`).join("\n");
   $("#doctorInfo").textContent = d.doctors.map(x => `${x.name}: ${(d.learn.byDoctor[x.id] || { n: 0 }).n} 回分を学習`).join("、");
@@ -612,7 +620,7 @@ function bindMenu() {
       const same = old.find(x => x.mark === p[0]);
       return { id: same ? same.id : "d" + Date.now() + Math.random().toString(36).slice(2, 6), mark: p[0], name: p.slice(1).join(" ") || p[0], ...(same && same.alt ? { alt: same.alt } : {}) };
     });
-    Store.save(); renderDoctors(); renderMenu(); toast("医師の一覧を保存しました");
+    Store.save(); renderMenu(); toast("医師の一覧を保存しました");
   };
   $("#btnExportSamples").onclick = async () => {
     const rows = await SampleDB.all();
@@ -628,6 +636,7 @@ function bindMenu() {
     await SampleDB.clear(); renderMenu();
   };
   $("#btnSaveOther").onclick = () => {
+    Store.data.settings.autoPdf = $("#sAutoPdf").checked;
     Store.data.settings.gaiyouDefaultTimes = toHalf($("#sGaiyouTimes").value) || "2";
     Store.data.settings.yearFormat = $("#sYear").value;
     Store.save(); renderPreview(); toast("保存しました");
@@ -673,9 +682,7 @@ function init() {
   $("#yt-css").textContent = YakutaiRender.pageCss(Store.layout());
   S.common = Object.assign({ name: "" }, today());
   renderHelpers();
-  renderDoctors();
   renderAll();
-  $("#doctorChips").addEventListener("change", e => { if (e.target.name === "doctor") setDoctor(e.target.value); });
 
   $("#camInput").onchange = e => setPhoto(e.target.files[0]);
   $("#fileInput").onchange = e => setPhoto(e.target.files[0]);
@@ -703,9 +710,8 @@ function init() {
   $("#addNaifuku").onclick = () => { S.bags.push(Object.assign(emptyBag("naifuku"), { size: "small" })); renderAll(); };
   $("#addGaiyou").onclick = () => { S.bags.push(Object.assign(emptyBag("gaiyou"), { size: "small", kind: "ぬり薬", times: Store.data.settings.gaiyouDefaultTimes })); renderAll(); };
 
-  $("#chkVerified").onchange = updatePdfButton;
   $("#btnPdf").onclick = makePdfs;
-  $("#pdfResult").onclick = e => {
+  $("#pdfResult").onclick = $("#quickPrint").onclick = e => {
     const s = e.target.closest("[data-share]"), o = e.target.closest("[data-open]");
     if (s) sharePdf(+s.dataset.share);
     if (o) openPdf(+o.dataset.open);
