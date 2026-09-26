@@ -65,7 +65,7 @@
       const def = D.drugs.find(x => x.name === d.name);
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
-      for (const k of ["common", "mix", "dose", "adopted", "syrup"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      for (const k of ["common", "mix", "dose", "adopted", "syrup", "site"]) if (def[k] != null && d[k] == null) d[k] = def[k];
       if (def.fixedTimes) { d.fixedTimes = true; d.times = def.times; d.note = def.note; }   // 回数が決まっている薬（クレナフィン・ルコナック＝夜1回）
     }
     for (const s of data.sites) {
@@ -196,6 +196,31 @@
     }
     save();
   }
+  // 操作なしで印刷したとき：自信を持って読めた袋（推測した項目がないもの）だけを、よく使う薬・部位・用法として覚える
+  // （推測を含む袋まで覚えると読み違いを覚えてしまうため。直して作り直したときは learnFrom ですべて覚える）
+  function learnConfident(bags, doctorId) {
+    const ok = (bags || []).filter(b => !(b.uncertain || []).length && (b.drug_names || []).length && !b.drug_names.includes("（薬品名不明）"));
+    if (!ok.length) return 0;
+    const L = data.learn, P = doctorLearn(doctorId);
+    L.drugCount = L.drugCount || {}; L.siteCount = L.siteCount || {};
+    for (const b of ok) {
+      for (const n of b.drug_names) { bump(L.drugCount, n); bump(P.drugCount, n); }
+      if (b.site) { bump(L.siteCount, b.site); bump(P.siteCount, b.site); }
+      if (b.type === "gaiyou") {
+        for (const G of [L.gaiyou, P.gaiyou]) {
+          const g = G[b.drug_names[0]] || (G[b.drug_names[0]] = { times: {}, site: {} });
+          if (b.times) bump(g.times, b.times);
+          if (b.site) bump(g.site, b.site);
+        }
+      } else if (!b.tonpuku && b.times) {
+        const key = b.drug_names.slice().sort().join("|");
+        L.usage[key] = L.usage[key] || {};
+        bump(L.usage[key], JSON.stringify({ times: b.times, timing: b.timing, meal: b.meal, days: b.days }));
+      }
+    }
+    save();
+    return ok.length;
+  }
   // 行の差分から「a[i] が f[j] に置き換えられた」組を拾う（単純な LCS による対応付け）
   function alignReplaced(a, f) {
     const n = a.length, m = f.length, dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
@@ -233,6 +258,6 @@
 
   load();
   global.Store = {
-    get data() { return data; }, save, layout, decideSize, ruleText, learnFrom, learnDoctor, learnFor, doctorLearn, presets, exportJSON, importJSON, reset,
+    get data() { return data; }, save, layout, decideSize, ruleText, learnFrom, learnConfident, learnDoctor, learnFor, doctorLearn, presets, exportJSON, importJSON, reset,
   };
 })(window);

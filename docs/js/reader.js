@@ -13,7 +13,13 @@
   // 行の中の「回数」の書き方（カルテ → 印字）
   const TIMES_TOKENS = [["夜1", "夜1"], ["日1", "1"], ["日2", "2"], ["日3", "3"], ["数回", "数"]];
 
-  const P = { confMinN: 3, confExtra: 3.0, bonus: 1.0, common: 1.0, adopted: 0.3, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4 };   // 判定のしきい値（テストで調整）
+  const P = { confMinN: 3, confExtra: 3.0, bonus: 1.0, common: 1.0, adopted: 0.3, drugMin: -2.5, drugSure: 1.0, siteMin: 0.5, tokenMin: 0.4,
+    siteDrug: 2.0, siteDefault: 1.0, siteGen: -0.5, siteSure: 2.0, siteCover: 1.5, dittoPen: 2.0, joint: 3 };   // 判定のしきい値（テストで調整）
+  // 部位の組み立て（カルテでは「体の場所＋状態」の書き方が多い。一覧にない組み合わせも読めるように）
+  const SITE_PARTS = [["顔", ["カオ", "顔"]], ["体", ["カラダ", "体"]], ["首", ["クビ", "首"]], ["手", ["テ", "手"]], ["足", ["アシ", "足"]],
+    ["頭", ["アタマ", "頭"]], ["全身", ["ゼンシン", "全身"]], ["口", ["クチ", "口"]], ["鼻", ["ハナ", "鼻"]], ["うで", ["ウデ", "腕"]]];
+  const SITE_CONDS = [["保湿", ["ホシツ", "保湿"]], ["ニキビ", ["ニキビ"]], ["わるいところ", ["ワルイトコロ", "悪イトコロ"]], ["かゆいところ", ["カユイトコロ", "痒イトコロ"]],
+    ["赤いところ", ["アカイトコロ", "赤イトコロ"]], ["よいところ", ["ヨイトコロ", "良イトコロ"]], ["アセモ", ["アセモ"]], ["アトピー", ["アトピー"]], ["かさかさ", ["カサカサ"]]];
 
   function kata(s) {
     return String(s || "").normalize("NFKC").replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
@@ -56,14 +62,70 @@
       }
     }
     const variants = (global.KarteParser && global.KarteParser.siteVariants) || (w => [w]);
+    const siteKeys = new Map();   // 照合の形 → 印字する部位
     for (const s of data.sites || []) {
       for (const w of new Set([s.label, ...(s.aliases || [])].flatMap(variants))) {
         const k = keyOf(w);
-        if (k.length >= 2) sites.push({ key: k, emit: s.label, prior: (s.common ? P.common * 0.5 : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (usedSite[s.label] || 0))) });   // 1文字（手・足など）は誤検出が多いので照合しない
+        if (k.length >= 2) { sites.push({ key: k, emit: s.label, prior: (s.common ? P.common * 0.5 : 0) + Math.min(1.5, 0.5 * Math.log2(1 + (usedSite[s.label] || 0))) }); siteKeys.set(k, s.label); }   // 1文字（手・足など）は誤検出が多いので照合しない
+      }
+    }
+    // 一覧にない「場所＋状態」の組み合わせ（例: 首かゆいところ）も、少し低い点数で候補にする
+    if (P.siteGen > -9) {
+      for (const [pl, pr] of SITE_PARTS) for (const [cl, cr] of SITE_CONDS) {
+        // すでに一覧にある部位（読み方のどれかが同じもの）なら、その印字にそろえる
+        const own = [pl + cl, ...pr.flatMap(a => cr.map(b => a + b))].map(keyOf).map(k => siteKeys.get(k)).find(Boolean) || null;
+        const emit = own || pl + cl;
+        for (const a of pr) for (const b of cr) {
+          const k = keyOf(a + b);
+          if (siteKeys.has(k)) continue;
+          siteKeys.set(k, emit);
+          sites.push({ key: k, emit, prior: (own ? 0 : P.siteGen) + Math.min(1.5, 0.5 * Math.log2(1 + (usedSite[emit] || 0))) });
+        }
       }
     }
     const times = TIMES_TOKENS.map(([w, emit]) => ({ key: w, emit }));
-    return { drugs, sites, times };
+    const defSite = {};
+    for (const d of data.drugs || []) if (d.site) defSite[d.name] = d.site;   // 薬ごとのよく使う部位（data.js）
+    return { drugs, sites, times, learn: learn || {}, defSite };
+  }
+  // 薬 name を塗る部位として site がどれくらいありそうか（学習した回数の割合＋薬ごとの目安）
+  function sitePrior(lex, name, site) {
+    if (!name) return 0;
+    let b = 0;
+    const g = ((lex.learn || {}).gaiyou || {})[name];
+    if (g && g.site) {
+      const tot = Object.values(g.site).reduce((a, x) => a + x, 0);
+      if (tot) b += P.siteDrug * (g.site[site] || 0) / tot;
+    }
+    if (lex.defSite && lex.defSite[name] === site) b += P.siteDefault;
+    return b;
+  }
+  // 部位の候補を、読み取りの点数と「この薬ならこの部位」の見込みを合わせて並べる
+  // 括弧の中の文字数（回数の書き方・記号を除く）より部位の読みが短いときは、読み残した分だけ減点する
+  // （例:「カオニキビ」が崩れて読めたときに、短い「カオ（顔）」だけが当てはまって選ばれるのを防ぐ）
+  function rankSites(row, lex, range, drugName, k) {
+    const len = innerLen(row, range);
+    const c = rankOf(row, lex.sites, range, 40, W_SITE).map(x => Object.assign({}, x, {
+      score: x.score + sitePrior(lex, drugName, x.e.emit) - (len ? P.siteCover * Math.max(0, len - x.e.key.length) : 0) }));
+    return c.sort((a, b) => b.score - a.score).slice(0, k || 5);
+  }
+  function innerLen(row, range) {
+    for (const w of ["B", "A"]) {
+      const m = row[w];
+      if (!m || !m.chars) continue;
+      const r = range && range[w];
+      const t = m.chars.filter(c => !r || (c.t >= r[0] && c.t < r[1])).map(c => c.ch).join("");
+      const i = t.lastIndexOf("(");
+      const inner = (i >= 0 ? t.slice(i + 1) : t).replace(/[)）].*$/, "").replace(RE_TIMES_IN, "").replace(/[\s.,、。・:;'`()〃\d]/g, "");
+      if (inner) return inner.length;
+    }
+    return 0;
+  }
+  // 薬 name のいちばんありそうな部位（読み取りの手がかりがないとき）
+  function guessSite(lex, name) {
+    const g = ((lex.learn || {}).gaiyou || {})[name];
+    if (g && g.site) { const e = Object.entries(g.site).sort((a, b) => b[1] - a[1])[0]; if (e) return e[0]; }
+    return (lex.defSite && lex.defSite[name]) || "";
   }
   // ---------------------------------------------------------------- カタカナ優先の読み取り
   // カルテはカタカナで書かれることが多いので、読み取りの文字を「カタカナ・数字・カルテで使う記号と一部の漢字」に絞る。
@@ -267,6 +329,9 @@
   // 辞書の中から当てはまる語を良い順に k 個（印字する名前が同じものは1つにまとめる）。
   // w: モデルの種類ごとの重み。薬は両方を足し、部位・回数は手書きに強い B だけで見る
   const W_DRUG = { ctc: 1, seq: 1 }, W_SITE = { ctc: 0, seq: 1 };
+  if (global.READER_TUNE) {   // テスト用（重みの調整）
+    Object.assign(P, global.READER_TUNE.P || {}); Object.assign(W_DRUG, global.READER_TUNE.WD || {}); Object.assign(W_SITE, global.READER_TUNE.WS || {});
+  }
   const FLOOR = -5;
   function rankOf(row, entries, range, k, w) {
     w = w || W_DRUG;
@@ -300,7 +365,7 @@
   // ---------------------------------------------------------------- 行の組み立て
   function norm(s) { return String(s || "").normalize("NFKC"); }
   const RE_DATE = /(?<!\d)(\d{1,2})\s*[.,/。、]\s*(\d{1,2})\s*[.,/。、]\s*(\d{1,2})/;
-  const RE_USAGE = /(?:^|[^\d])([1-3lI|(])\s*[x×X+ナメ]\s*([NnWwuU4√HhVvタ夕7クネ朝昼])/;
+  const RE_USAGE = /(?:^|[^\d])([1-3lI|(])\s*(?:[x×X+ナメ]\s*([NnWwuU4√HhVvタ夕7クネ朝昼])|4\s*([NnWw]))/;
   const RE_TD = /(\d{1,3})\s*(?:[TtＴ7]\s*)?[DdＤ0OoPpV]/;
 
   function readUsage(t) {
@@ -309,7 +374,7 @@
     const m = t.match(RE_USAGE);
     if (m) {
       u.times = /[lI|(]/.test(m[1]) ? "1" : m[1];
-      const c = m[2];
+      const c = m[2] || m[3];
       u.code = /[タ夕7ク]/.test(c) ? "タ" : c === "ネ" ? "ネル前" : c === "朝" ? "朝" : c === "昼" ? "昼" : "N";
       if (u.times === "1" && u.code === "N") u.code = "タ";
       const rest = t.slice(m.index + m[0].length);
@@ -322,9 +387,18 @@
     return u;
   }
   function readDays(t) {
-    const m = norm(t).match(/(\d{1,4})/);
-    if (!m) return null;
-    const s = m[1];
+    t = norm(t);
+    // 「60TD」「6070」「60TP」のように、日数の印（TD）の直前の数を優先する（同じ行の「3T」などを日数と取り違えない）
+    const m = t.match(/(\d{1,3})\s*[TtＴ7]\s*[DdＤPpOo0]/) || t.match(/(\d{1,3})\s*(?:[DdＤ]|日分)/);
+    if (m) {
+      const s = m[1];
+      if (DAYS_COMMON.includes(+s)) return s;
+      if (s.length === 3 && DAYS_COMMON.includes(+s.slice(0, 2))) return s.slice(0, 2);
+      if (+s >= 1 && +s <= 120) return s + "？";
+    }
+    const m2 = t.match(/(\d{1,4})/);
+    if (!m2) return null;
+    const s = m2[1];
     if (s.length >= 2 && DAYS_COMMON.includes(+s.slice(0, 2))) return s.slice(0, 2);
     if (DAYS_COMMON.includes(+s.slice(0, 1)) && s.length === 1) return s;
     if (s.length >= 2 && RE_TD.test(t)) return s.slice(0, 2) + "？";
@@ -332,17 +406,21 @@
   }
 
   // 各フレームの位置に対応する文字（貪欲読み）→ 区間より後ろの文字列
-  function tailText(m, t1) {
+  function tailText(m, t1, t2) {
     if (!m || !m.chars) return "";
-    return m.chars.filter(c => c.t > t1).map(c => c.ch).join("");
+    return m.chars.filter(c => c.t > t1 && (t2 == null || c.t < t2)).map(c => c.ch).join("");
   }
   // tails: 2つのモデルの「薬の名前より後ろ」の文字列。書き方ごとに、どちらかで読めたものを採る
   function readQty(tails, type) {
     const ts = tails.map(norm);
     const pats = type === "gaiyou" ? [
       [/(\d{2,3})\s*(?:cc|CC|ml|mL)/, m => `${m[1]}cc`],
+      [/(\d{2,3})\s*[g9]\s*[x×X]\s*([1-9])/, m => `${m[1]}g×${m[2]}`],
       [/([1-9]\d?)\s*[本年平木不下未]/, m => `${m[1]}本`],
+      [/[ニ二]\s*[本年平木不下未]/, m => "2本"],
       [/[-ー~_一]\s*([1-4])(?:\s*[x×X]\s*([1-9]))?(?!\d)/, m => `-${m[1]}${m[2] ? "×" + m[2] : ""}`],
+      // 「本」が「4」と読まれることが多い（例: 2本 → 24）。外用で14本以上はまずないので、○4 は ○本 とみる
+      [/(?:^|[^\d])([1-9])4(?![\d])/, m => `${m[1]}本`],
     ] : [
       [/([1-9])\s*[TtＴてテ丁]/, m => `${m[1]}T`],
       [/([1-9])\s*(?:C|カ)/, m => `${m[1]}C`],
@@ -363,29 +441,78 @@
 
   // 行の頭の「Rp)」とその読み違い（{P) =P) 2P) など）・箇条書きの点を除く
   function stripHead(t) {
-    return norm(t).trim().replace(/^[(（]?[RrＲ尺2{}=]?[PpＰ][)）][\s.。、・]*/, "").replace(/^[^\s(（]{1,3}\)[\s.。、・]*/, "").replace(/^[\s・.\-ー—]+/, "");
+    return norm(t).trim().replace(/^[(（]?[RrＲ尺2{}=\-]?[PpＰ][)）][\s.。、・]*/, "").replace(/^[^\s(（]{1,3}\)[\s.。、・]*/, "")
+      .replace(/^[(（][^)）\s]{1,2}[)）]\s*(?=\S{3})/, "").replace(/^[\s・.\-ー—]+/, "");   // 行頭の「(-P)」「(8)」＝ Rp) や Ⓐ の読み違い
   }
   function startsParen(row) {
     return /^[(（Cc<{[]/.test(stripHead(row.ta)) || /^[(（]/.test(stripHead(row.tb));
   }
+  // 行の途中にある部位の括弧「(」の位置（モデルごと）。
+  // 行の最後の「(」で前に2文字以上あるもの。「(25)」（チューブの大きさ）・「(NP)」「(油)」などの注記は除く
+  function parenSplit(row) {
+    const out = {};
+    for (const w of ["A", "J", "B"]) {
+      const m = row[w];
+      if (!m || !m.chars) continue;
+      let pos = null;
+      m.chars.forEach((c, i) => {
+        if (c.ch !== "(" || i < 2) return;
+        const inner = m.chars.slice(i + 1, i + 5).map(x => x.ch).join("");
+        if (/^\s*\d{1,3}\s*\)/.test(inner) || /^\s*(?:np|NP|油|乳)/i.test(inner)) return;
+        pos = c.t;
+      });
+      if (pos != null) out[w] = pos;
+    }
+    return Object.keys(out).length ? out : null;
+  }
+  function siteRange(row, split) {
+    const r = {};
+    for (const w of ["A", "J", "B"]) if (row[w]) r[w] = [split[w] != null ? split[w] : 0, row[w].T];
+    return r;
+  }
+  function beforeSplit(row, split) {
+    const r = {};
+    for (const w of ["A", "J", "B"]) if (row[w]) r[w] = [0, split[w] != null ? split[w] : row[w].T];
+    return r;
+  }
+  // 括弧の中身（回数の書き方と記号を除いた文字）。部位が「〃」かどうかの判定に使う
+  const RE_TIMES_IN = /1?日\s*[123]|夜\s*1|数\s*回?/g;
+  function innerOf(t) {
+    const m = norm(t).match(/[(（]([^)）]*)[)）]?\s*$/) || norm(t).match(/[(（]([^)）]*)/);
+    return m ? m[1].replace(RE_TIMES_IN, "").replace(/[\s.,、。・:;'`]/g, "") : null;
+  }
+  function looksDitto(texts, top) {
+    const ins = texts.map(innerOf).filter(x => x != null);
+    if (!ins.length) return false;
+    if (ins.some(x => /[〃々"″]/.test(x) && x.length <= 3)) return true;
+    return ins.every(x => x.length <= 1);
+  }
 
   function timesText(tm) { return tm.e.emit === "夜1" ? "夜1" : tm.e.emit === "数" ? "1日数回" : `日${tm.e.emit}`; }
 
-  // 候補の薬 cand で、この行を「カルテの書き方の1行」にする
-  function composeDrug(row, cand, lex, usage) {
+  // 候補の薬 cand で、この行を「カルテの書き方の1行」にする。split: 行の途中の部位の括弧の位置
+  function composeDrug(row, cand, lex, usage, split) {
     const d = cand.e.drug;
-    const tails = ["B", "A", "J"].filter(w => row[w]).map(w => tailText(row[w], cand.spans[w] ? cand.spans[w][1] : -1));
+    const tails = ["B", "A", "J"].filter(w => row[w]).map(w => tailText(row[w], cand.spans[w] ? cand.spans[w][1] : -1, split && split[w] != null ? split[w] : null));
     const type = d.type === "gaiyou" ? "gaiyou" : "naifuku";
     let q = d.set ? null : readQty(tails, type);
-    let guessed = false;
+    let guessed = false, siteGuess = false;
     if (!q && type === "naifuku" && d.dose) { q = { text: d.dose }; guessed = true; }
     const parts = [cand.e.emit];
     if (q) parts.push(q.text);
     if (type === "gaiyou") {
       const range = {};
-      for (const w of ["A", "J", "B"]) if (row[w]) range[w] = [cand.spans[w] ? cand.spans[w][1] + 1 : 0, row[w].T];
-      const site = bestOf(row, lex.sites, range, W_SITE);
-      if (site && site.score >= P.siteMin) parts.push(`(${site.e.emit})`);
+      for (const w of ["A", "J", "B"]) if (row[w]) {
+        let from = cand.spans[w] ? cand.spans[w][1] + 1 : 0;
+        if (split && split[w] != null) from = Math.max(from, split[w]);
+        range[w] = [from, row[w].T];
+      }
+      const sites = rankSites(row, lex, range, d.name, 5);
+      const site = sites[0];
+      const pt = split ? ["A", "J", "B"].filter(w => row[w] && split[w] != null).map(w => tailText(row[w], split[w] - 1)) : [];
+      if (split && looksDitto(pt, site)) parts.push("(〃)");
+      else if (site && site.score >= P.siteMin) parts.push(`(${site.e.emit})`);
+      else if (split && site) { parts.push(`(${site.e.emit})`); siteGuess = parts.length - 1; }   // 括弧はあるのに読めない → いちばん近い部位
       const tm = bestOf(row, lex.times, range, W_SITE);
       if (tm && tm.pen > -P.tokenMin * 3) parts.push(timesText(tm));
     } else if (usage.times || usage.days) {
@@ -394,13 +521,31 @@
     }
     // 本数が多い（袋のサイズに関わる）のにモデル間で読みがそろわないときも確認してもらう
     const bigQty = q && /^\d+本$/.test(q.text) && parseInt(q.text) >= 5 && !q.sure;
-    const unsure = cand.score < P.drugSure * cand.wsum || guessed || bigQty;
-    return parts.join(" ") + (unsure ? " ？" : "");
+    const unsure = cand.score < P.drugSure * cand.wsum || guessed || bigQty || siteGuess !== false;
+    const text = parts.join(" ") + (unsure ? " ？" : "");
+    if (siteGuess === false) return text;
+    const noSite = parts.filter((x, i) => i !== siteGuess).join(" ") + " ？";
+    return Object.assign(new String(text), { noSite });   // noSite: 次の行が部位の行だったときに使う（推測した部位を外したもの）
+  }
+
+  // 部位だけの行（括弧の行）。drugName: 直前の外用薬（その薬でよく使う部位を手がかりにする）、needSite: 直前の薬の行にまだ部位がない
+  function siteLine(row, lex, drugName, needSite) {
+    const ta = norm(row.ta), tb = norm(row.tb);
+    const sites = rankSites(row, lex, null, drugName, 5);
+    const tm = bestOf(row, lex.times, null, W_SITE);
+    const tmText = tm && tm.pen > -P.tokenMin * 3 ? " " + timesText(tm) : "";
+    const siteAlts = [{ label: "〃（上と同じ）", text: "(〃)" }, ...sites.map(c => ({ label: c.e.emit, text: `(${c.e.emit})${tmText}` }))];
+    const top = sites[0];
+    if (looksDitto([ta, tb], top)) return { kind: "site", text: "(〃)", alts: siteAlts };
+    if (top && top.score >= P.siteMin) return { kind: "site", text: siteAlts[1].text, alts: siteAlts };
+    // 読めなくても、直前の薬の部位が空いているなら、いちばん近い部位を「？」付きで入れる（空欄にしない）
+    if (top && needSite) return { kind: "site", text: siteAlts[1].text + " ？", alts: siteAlts, guess: true };
+    return { kind: "raw", text: "# " + (ta || tb), alts: siteAlts };
   }
 
   // rows: makeRows の結果（上から順）。lex: buildLexicon の結果。
   // 戻り値: 行ごとの { kind, text, alts: [{label, text}]（選び直し候補）, row }
-  const RE_QTY_HINT = /\d\s*[本木末平年T丁]|[-ー~]\s*[1-4](?![\d.])|\d\s*g(?![a-z])/;
+  const RE_QTY_HINT = /[\dニ二]\s*[本木末平年T丁下不未]|[-ー~]\s*[1-4](?![\d.])|\d\s*g(?![a-z])/;
   function read(rows, lex) {
     let dateIdx = -1, dateVal = -1;
     const lines = rows.map((row, i) => {
@@ -413,40 +558,59 @@
       }
       let paren = startsParen(row);
       const usage = readUsage(ta);
-      let drugs = paren ? [] : rankOf(row, lex.drugs, null, 5);
-      if (!paren && drugs.length && /[(（]/.test(ta + tb)) {
+      const split = paren ? null : parenSplit(row);
+      let drugs = paren ? [] : rankOf(row, lex.drugs, split ? beforeSplit(row, split) : null, 5);
+      if (!paren && !split && drugs.length && /[(（]/.test(ta + tb)) {
         const st = bestOf(row, lex.sites, null, W_SITE);
         if (st && st.score * drugs[0].wsum > drugs[0].score) { paren = true; drugs = []; }
       }
-      const drugAlts = drugs.map(c => ({ label: c.e.emit, text: composeDrug(row, c, lex, usage) }));
+      const drugAlts = drugs.map(c => ({ label: c.e.emit, text: composeDrug(row, c, lex, usage, split) }));
       if (drugs.length && drugs[0].score >= P.drugMin * drugs[0].wsum) {
-        return { kind: "drug", text: drugAlts[0].text, alts: drugAlts, row };
+        return { kind: "drug", text: drugAlts[0].text, alts: drugAlts, row, drug: drugs[0].e.drug, cands: drugs, usage, split };
       }
       // 点数は低くても「2本」「3T」「-3」のような数量が読めた行は薬の行とみて、いちばん近い薬を「？」付きで出す（候補から選び直せる）
       if (drugs.length && !usage.times && RE_QTY_HINT.test(ta + " " + tb)) {
         const t = drugAlts[0].text;
-        return { kind: "drug", text: /[?？]\s*$/.test(t) ? t : t + " ？", alts: drugAlts, row, guess: true };
+        return { kind: "drug", text: /[?？]\s*$/.test(t) ? t : t + " ？", alts: drugAlts, row, guess: true, drug: drugs[0].e.drug, cands: drugs, usage, split };
       }
       if (usage.times) {
         return { kind: "usage", text: `${usage.times}×${usage.code}` + (usage.days ? ` ${usage.days}TD` : ""), alts: drugAlts, row };
       }
-      if (paren || /[(（]/.test(ta + tb)) {
-        const sites = rankOf(row, lex.sites, null, 5, W_SITE);
-        const tm = bestOf(row, lex.times, null, W_SITE);
-        const tmText = tm && tm.pen > -P.tokenMin * 3 ? " " + timesText(tm) : "";
-        const siteAlts = [{ label: "〃（上と同じ）", text: "(〃)" }, ...sites.map(c => ({ label: c.e.emit, text: `(${c.e.emit})${tmText}` }))];
-        const inner = t => (norm(t).match(/[(（]([^)）]*)/) || [, "xxx"])[1].replace(/\s/g, "");
-        const ditto = /[〃々"″]/.test(ta + tb) || (inner(ta).length <= 2 && inner(tb).length <= 2);
-        if (ditto) return { kind: "site", text: "(〃)", alts: siteAlts, row };
-        if (sites.length && sites[0].score >= P.siteMin) return { kind: "site", text: siteAlts[1].text, alts: siteAlts, row };
-        return { kind: "raw", text: "# " + (ta || tb), alts: siteAlts, row };
-      }
+      if (paren || /[(（]/.test(ta + tb)) return { kind: "paren", text: "", alts: [], row };   // 部位の行（前の薬に合わせて、あとで決める）
       return { kind: "raw", text: "# " + (ta || tb), alts: drugAlts, row };
+    });
+    // 部位だけの行は、直前の外用薬を手がかりに決める
+    let last = null;
+    for (const l of lines) {
+      if (l.kind === "drug") { last = l; l.text = String(l.text); continue; }
+      if (l.kind === "usage" || l.kind === "date") { last = null; continue; }
+      if (l.kind !== "paren") continue;
+      const dn = last && last.drug && last.drug.type === "gaiyou" ? last.drug.name : null;
+      const guessed = last && last.alts && last.alts[0] && last.alts[0].text && last.alts[0].text.noSite;
+      Object.assign(l, siteLine(l.row, lex, dn, !!(last && dn && (!/\(/.test(last.text) || guessed))));
+      if (l.kind === "site" && guessed && l.text !== "(〃)") last.text = guessed;
+      if (l.kind === "site") last = null;
+    }
+    // 薬と部位を合わせて選び直す：部位がはっきり読めたら、その部位でよく使う薬を上げる（例: 顔保湿 → ヘパリン類似物質）
+    if (P.joint) lines.forEach((l, i) => {
+      if (l.kind !== "drug" || !l.cands || l.cands.length < 2) return;
+      const next = lines[i + 1];
+      const srow = l.split ? { row: l.row, range: siteRange(l.row, l.split) } : next && next.kind === "site" && next.text !== "(〃)" ? { row: next.row, range: null } : null;
+      if (!srow) return;
+      const st = rankSites(srow.row, lex, srow.range, null, 1)[0];
+      if (!st || st.score < P.siteMin) return;
+      const re = l.cands.map(c => ({ c, s: c.score + P.joint * sitePrior(lex, c.e.drug.name, st.e.emit) })).sort((a, b) => b.s - a.s);
+      if (re[0].c === l.cands[0]) return;
+      const c = re[0].c, t = composeDrug(l.row, c, lex, l.usage, l.split);
+      const guess = l.guess && !/[?？]\s*$/.test(t) ? t + " ？" : t;
+      l.alts = [{ label: c.e.emit, text: guess }, ...l.alts.filter(a => a.label !== c.e.emit)];
+      l.text = String(guess); l.drug = c.e.drug;
     });
     // 同じ紙に以前の日付の処方があれば、いちばん新しい日付より後ろだけを使う
     return lines.filter((l, i) => (dateIdx < 0 || i >= dateIdx) &&
       !(l.kind === "raw" && norm(l.text).replace(/[#\s]/g, "").length < 2));
   }
+
 
   // ---------------------------------------------------------------- 行にまとめる
   // items: [{ x, top, bottom, A, B }]。A/B は { T, chars: 残した文字の並び, lp: T×K の対数確率, blank, max, seq: [{t, ch}] }
@@ -468,7 +632,20 @@
     return m;
   }
   // profile: その医師の癖（learnRow で覚えたもの。省略可）
+  // 読み違いの傾向を合わせる（初期データ handBase ＝ サンプルから数えた、どの先生にも共通の傾向 ＋ その先生の分）
+  function mergeConf(a, b) {
+    if (!a) return b || null;
+    if (!b) return a;
+    const out = JSON.parse(JSON.stringify(a));
+    for (const [w, cs] of Object.entries(b)) for (const [c, rs] of Object.entries(cs)) for (const [r, n] of Object.entries(rs)) {
+      const x = ((out[w] = out[w] || {})[c] = out[w][c] || {});
+      x[r] = (x[r] || 0) + n;
+    }
+    return out;
+  }
   function makeRows(items, profile) {
+    const base = global.DEFAULT_DATA && global.DEFAULT_DATA.handBase;
+    const conf = mergeConf(base && base.conf, profile && profile.conf);
     items = items.slice().sort((a, b) => (a.top + a.bottom) - (b.top + b.bottom));
     const rows = [];
     for (const it of items) {
@@ -490,7 +667,7 @@
         return s.trim();
       };
       const J = r.items[0].J ? unpack(r.items.map(i => i.J)) : null;
-      if (profile && profile.conf) for (const [w, m] of [["A", A], ["J", J], ["B", B]]) if (m) m.conf = confMap(profile.conf[w]);
+      if (conf) for (const [w, m] of [["A", A], ["J", J], ["B", B]]) if (m) m.conf = confMap(conf[w]);
       return { ta: text(A, r.items.map(i => i.A)), tb: B && B.T ? text(B, r.items.map(i => i.B)) : (J ? text(J, r.items.map(i => i.J)) : ""), A, B: B && B.T ? B : null, J,
         box: { x: Math.min(...r.items.map(i => i.x)), x2: Math.max(...r.items.map(i => i.x2 != null ? i.x2 : i.x)), top: r.top, bottom: r.bottom } };
     });

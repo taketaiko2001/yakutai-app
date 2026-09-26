@@ -368,6 +368,20 @@
         if (!b.uncertain.includes("drugs")) b.uncertain.push("drugs");
         b.comment = ["数量も部位もない行です（処置の欄なら、この行は消してください）", b.comment].filter(Boolean).join("・");
       }
+      // 部位が読めないときも空欄にしない：この薬でよく使う部位（学習 → 薬ごとの目安 → これまでいちばん多い部位）
+      if (b.type === "gaiyou" && !b.site) {
+        const name = b.drug_names[0];
+        const lu = learnedGaiyou(name, learn);
+        const d = b._drug || {};
+        const top = Object.entries(learn.siteCount || {}).sort((x, y) => y[1] - x[1])[0];
+        const site = (lu && lu.site) || d.site || (top && top[0]) || "";
+        if (site) {
+          b.site = site;
+          if (!b.uncertain.includes("site")) b.uncertain.push("site");
+          b.comment = [b.comment, "部位が読めません → よく使う部位"].filter(Boolean).join("・");
+          if (!b._timesFromLine) { const st = siteTimes(d, site); if (st) b.times = st.times; }
+        }
+      }
       delete b._timesFromLine; delete b._ditto; delete b._drug;
     });
     res.text = out.join("\n");
@@ -389,6 +403,20 @@
     if (!usage.times && !usage.tonpuku && items.length) {
       const learned = learnedUsage(items.map(it => it.drug.name), learn);
       if (learned) { usage = Object.assign({}, learned); notes.push("用法の記載なし → よく使う用法を入れました"); ["times", "days", "timing", "meal"].forEach(k => unsure.add(k)); }
+      else {
+        // 空欄にしない：1日量（3T なら 3×N、2T なら 2×N、1T なら 1×夕）から推測
+        const it = items.find(x => x.qty != null && (x.unit === "T" || x.unit === "C")) || items.find(x => x.drug.dose);
+        const n = it ? (it.qty != null ? it.qty : parseFloat(it.drug.dose)) : 1;
+        const t = n >= 3 ? 3 : n === 2 ? 2 : 1;
+        usage = Object.assign({}, usage, { times: String(t), timing: { 3: ["朝", "昼", "夕"], 2: ["朝", "夕"], 1: ["夕"] }[t], meal: "食後" });
+        notes.push("用法が読めません → 1日量から推測");
+        ["times", "timing", "meal"].forEach(k => unsure.add(k));
+      }
+    }
+    // 日数が読めないときも空欄にしない（この薬・これまでによく使う日数、なければ14日）
+    if (!usage.tonpuku && usage.times && !usage.days) {
+      usage = Object.assign({}, usage, { days: commonDays(items.map(it => it.drug.name), learn) });
+      unsure.add("days"); notes.push("日数が読めません → よく使う日数");
     }
 
     if (usage.tonpuku) {
@@ -425,7 +453,15 @@
     }
     if (!bag.tonpuku) {
       for (const [row, pers] of Object.entries(rows)) {
-        if (pers.some(p => p == null)) { unsure.add(row); continue; }
+        if (pers.some(p => p == null)) {
+          // 1回量が読めないとき：薬の1日量（3T など）÷回数、それもなければ1（空欄にしない）
+          const est = items.filter(it => (UNIT_ROW[it.unit] || FORM_ROW[it.drug.form] || "tablet") === row).map(it => {
+            const d = parseFloat(it.drug.dose || "");
+            return d && times ? d / times : 1;
+          });
+          bag[row] = (est.length > 1 && est.every(x => x === est[0]) ? "各" : "") + fmtNum(est[0] || 1);
+          unsure.add(row); continue;
+        }
         if (pers.every(p => Math.abs(p - pers[0]) < 1e-9)) bag[row] = (pers.length > 1 ? "各" : "") + fmtNum(pers[0]);
         else { bag[row] = fmtNum(pers.reduce((a, b) => a + b, 0)); unsure.add(row); notes.push("1回量が薬ごとに異なります（合計を入れています）"); }
       }
@@ -566,6 +602,19 @@
     if (!stats) return null;
     const best = Object.entries(stats).sort((a, b) => b[1] - a[1])[0];
     return best ? JSON.parse(best[0]) : null;
+  }
+  // よく使う日数（この薬の学習 → 全体の学習 → 14日）
+  function commonDays(names, learn) {
+    const cnt = {};
+    const key = names.slice().sort().join("|");
+    for (const [k, stats] of Object.entries(learn.usage || {})) {
+      for (const [u, n] of Object.entries(stats)) {
+        let d; try { d = JSON.parse(u).days; } catch (e) { continue; }
+        if (d) cnt[d] = (cnt[d] || 0) + n * (k === key ? 10 : 1);
+      }
+    }
+    const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    return best ? best[0] : "14";
   }
   function learnedGaiyou(name, learn) {
     const stats = (learn.gaiyou || {})[name];

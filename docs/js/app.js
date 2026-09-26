@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26h";
+const APP_VERSION = "2026-09-26i";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -137,7 +137,11 @@ async function readPhoto() {
     st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。` +
       (unsure ? `自信のない行が ${unsure} 行あります（印刷した袋をカルテと見比べてください。直すときは下の「読み取った行」で）。` : "");
     // 読み取ったらそのまま印刷用PDFまで作る（操作なしで印刷へ）
-    if (Store.data.settings.autoPdf !== false && S.bags.length) { busy(false); await buildPdfs(); tryAutoShare(); }
+    if (Store.data.settings.autoPdf !== false && S.bags.length) {
+      busy(false);
+      if (await buildPdfs()) Store.learnConfident(S.bags, curDoctor());   // 自信を持って読めた袋だけ覚える（精度を上げていく）
+      tryAutoShare();
+    }
   } catch (e) {
     st.hidden = false; st.className = "status warn";
     st.textContent = "読み取りできませんでした: " + e.message + "（②に手で入力しても使えます）";
@@ -394,12 +398,16 @@ function renderPreview() {
   const boxW = Math.min(170, Math.max(120, ($("#previewList").clientWidth - 20) / 2));
   const maxW = Math.max(...Object.values(L.sizes).map(s => s.width_mm));
   const scale = boxW / (maxW * PX_PER_MM);
-  $("#previewList").innerHTML = S.bags.map((b, i) => {
+  const UNS = { site: "部位", times: "回数", days: "日数", tablet: "1回量", capsule: "1回量", powder: "1回量", timing: "時点", meal: "食事" };   // 印字される項目だけ（薬の名前は印字しない）
+  const html = S.bags.map((b, i) => {
     const sz = L.sizes[b.size];
-    return `<div class="pv"><div class="pv-cap">袋${i + 1}（${b.size === "A5" ? "大" : "小"}）</div>
+    const u = [...new Set(b.uncertain.map(k => UNS[k]).filter(Boolean))];
+    return `<div class="pv"><div class="pv-cap">袋${i + 1}（${b.size === "A5" ? "大" : "小"}）${u.length ? `<span class="pv-warn">推測: ${esc(u.join("・"))}</span>` : ""}</div>
       <div class="pv-frame" style="width:${(sz.width_mm * PX_PER_MM * scale).toFixed(1)}px;height:${(sz.height_mm * PX_PER_MM * scale).toFixed(1)}px">
       <div class="pv-inner" style="transform:scale(${scale.toFixed(4)})">${YakutaiRender.renderPage(b, common, L, { art: true, noOffset: true })}</div></div></div>`;
   }).join("");
+  $("#previewList").innerHTML = html;
+  $("#quickPreview").innerHTML = html;   // 読み取った直後にも、印刷される内容を画面の上に出す
   if (S.pdfs.length && S.pdfSig !== pdfSig()) { S.pdfs = []; renderPdfResult(); }
   updatePdfButton();
 }
