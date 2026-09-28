@@ -1,9 +1,10 @@
 // 薬袋プリント：PC で読むためのサーバー（院内の Wi-Fi の中だけで使う）
 //  ・スマホに アプリ（docs）を配る:  http://<このPCのアドレス>:8787/
-//  ・/api/read  スマホから「処方の部分だけ」の画像を受け取り、Claude に読ませて結果を返す
+//  ・/api/read  スマホから「処方の部分だけ」の画像（と、スマホの薬・部位の一覧）を受け取り、Claude に読ませて結果を返す
 //    画像はファイルに保存しない。読み取った内容も記録しない（時刻と秒数だけ表示）
+//  ・pc/examples/ に置いた見本（このクリニックのカルテの処方欄と正しい読み取り）を毎回いっしょに渡し、医師の字のくせを覚えさせる
 const http = require("http"), fs = require("fs"), path = require("path"), os = require("os");
-const { readImage, warm, claudeExe, EFFORT } = require("./claude_read.js");
+const { readImage, warm, claudeExe, loadExamples, EFFORT } = require("./claude_read.js");
 
 const PORT = +process.env.PORT || 8787;
 // 手書きの読み取りは Opus が大きく上回る（サンプル35枚で sonnet 43% / Opus 84%）
@@ -21,7 +22,11 @@ function isLocal(ip) {
 
 let queue = Promise.resolve();   // 1枚ずつ順に読む
 // 一時的に失敗することがあるので、1回だけ読み直す
-function readQueued(buf) { const p = queue.then(() => readImage(buf, MODEL).catch(() => readImage(buf, MODEL))); queue = p.catch(() => {}); return p; }
+function readQueued(buf, own) {
+  const ex = loadExamples();   // 見本は読むたびに読み込む（入れ替えても再起動いらず）
+  const p = queue.then(() => readImage(buf, MODEL, 0, ex, own).catch(() => readImage(buf, MODEL, 0, ex, own)));
+  queue = p.catch(() => {}); return p;
+}
 
 const server = http.createServer((req, res) => {
   if (!isLocal(req.socket.remoteAddress)) { res.writeHead(403); return res.end(); }
@@ -32,11 +37,19 @@ const server = http.createServer((req, res) => {
     req.on("data", c => { size += c.length; if (size > 8e6) { over = true; req.destroy(); } else chunks.push(c); });
     req.on("end", async () => {
       if (over) return;
-      const buf = Buffer.concat(chunks);
+      let buf = Buffer.concat(chunks), own = null;
       chunks.length = 0;
+      // 新しいスマホ画面は JSON（画像＋薬・部位の一覧）で送る。古い画面は JPEG だけ
+      if (/json/.test(req.headers["content-type"] || "")) {
+        try {
+          const j = JSON.parse(buf.toString("utf8"));
+          buf = Buffer.from(String(j.image || "").replace(/^data:image\/\w+;base64,/, ""), "base64");
+          own = { drugs: j.drugs, sites: j.sites };
+        } catch (e) { res.writeHead(400); return res.end(); }
+      }
       const t = new Date().toLocaleTimeString("ja-JP");
       try {
-        const r = await readQueued(buf);
+        const r = await readQueued(buf, own);
         console.log(`${t} 読み取り ${(r.ms / 1000).toFixed(1)}秒（出力 ${r.outTok} トークン）`);
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ text: r.text, ms: r.ms, model: MODEL }));
@@ -68,5 +81,6 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("スマホ（院内のWi-Fi）で次のアドレスを開いてください:");
   for (const ip of ips) console.log(`   http://${ip}:${PORT}/`);
   console.log(`読み取り: Claude（${MODEL}・effort ${EFFORT}）  ${claudeExe()}`);
+  console.log(`見本: ${loadExamples().length}枚（pc/examples）`);
   warm(MODEL);
 });

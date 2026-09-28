@@ -21,42 +21,48 @@ function claudeExe() {
   return "claude";
 }
 
-function vocab() {
-  const drugs = D.drugs.filter(d => d.adopted || d.common).map(d => `${d.name}${d.aliases && d.aliases.length ? "（" + d.aliases.filter(a => !/^[ぁ-ん]+$/.test(a)).slice(0, 5).join("・") + "）" : ""}`);
+// 薬・部位の一覧（スマホで追加・修正したものが送られてきたらそれを使う。なければ初期データ）
+function vocab(own) {
+  const srcDrugs = own && Array.isArray(own.drugs) && own.drugs.length ? own.drugs : D.drugs;
+  const srcSites = own && Array.isArray(own.sites) && own.sites.length ? own.sites : D.sites;
+  const str = x => String(x || "").slice(0, 60);
+  const drugs = srcDrugs.filter(d => d && (d.adopted || d.common)).slice(0, 400).map(d => `${str(d.name).replace(/（混合軟膏）$/, "")}${d.aliases && d.aliases.length ? "（" + d.aliases.map(str).filter(a => !/^[ぁ-ん]+$/.test(a)).slice(0, 5).join("・") + "）" : ""}`);
   // 部位は label が正式な書き方。カルテはカタカナで書くので、カタカナの書き方を（）で添える
-  const sites = D.sites.map(s => { const k = (s.aliases || []).filter(a => /^[ァ-ヶー・]+$/.test(a)); return s.label + (k.length ? "（" + k.join("・") + "）" : ""); });
+  const sites = srcSites.filter(s => s && s.label).slice(0, 300).map(s => { const k = (s.aliases || []).map(str).filter(a => /^[ァ-ヶー・]+$/.test(a)); return str(s.label) + (k.length ? "（" + k.join("・") + "）" : ""); });
   const sets = (D.sets || []).map(s => s.name || s);
   return { drugs, sites, sets };
 }
 
-function prompt() {
-  const v = vocab();
+function prompt(own) {
+  const v = vocab(own);
   return `皮膚科の手書きカルテの「処方」欄の画像です（処方以外の部分は白く消してあります）。${TWO_STEP ? `書かれている処方を読み取って、次の2つだけを出力してください（説明や前置きは書かない）。
 【読み】 カルテに書いてあるとおりに（略記・カタカナ・数字のまま）1行ずつ書き写す
 【処方】 【読み】を下の形式に直したもの（1薬1行）
 
-【処方】の形式（例）:` : `書かれている処方を読み取って、下の形式で1薬1行で出力してください。説明や前置きは書かず、処方の行だけを出力します。
+【処方】の形式:` : `書かれている処方を読み取って、下の形式で1薬1行で出力してください。考えたことや説明は書きません。1行目に「【処方】」とだけ書き、その下に処方の行だけを書きます。
 
-出力の形式（例）:`}
-ヘパリン類似物質ローション 2本 (顔保湿)
-クリンダマイシンゲル 2本 (顔ニキビ) 日2
-クレナフィン爪外用液 1本 (爪) 夜1
-ヘパリン類似物質油性クリーム 4本 (〃)
-サヘパ -3×2 (体・頭)
-ヘパリン類似物質ローション 50g×3 (全身保湿)
-しみ3つ 3×N 60TD
-ロラタジン錠 1T 1×タ 28TD
-ロキシスロマイシン錠 2T 2×N 14TD
-（例の薬・数量・部位は書き方の見本で、画像の内容とは関係ありません）
+出力の形式（〈 〉は画像から読んだものに置き換える。〈 〉は付けない）:`}
+〈薬の正式名〉 〈本数〉本 (〈部位〉)
+〈薬の正式名〉 〈g数〉g×〈個数〉 (〈部位〉) 〈回数の指示〉
+〈混合軟膏の略名〉 -〈容器の番号〉×〈個数〉 (〈部位〉)
+〈薬の正式名〉 〈1日量〉T 〈用法〉 〈日数〉TD
+〈セット名〉 〈用法〉 〈日数〉TD
 
 ルール:
-- 薬の名前は、その行の先頭に書かれた薬の略記を読んで決め、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など。一覧の（）の中が略記）。数量や部位から薬を推測しない。一覧にない薬はカルテの書き方のまま。
-- 外用の数量は「2本」「50g×3」、混合軟膏は「サヘパ -3」「ベタヘパ -2×2」（-数字は容器の番号、×は個数）。
-- 部位は括弧の中に、ほとんどカタカナで書いてある（アタマ、カオ、カラダ、クビ、テ、アシ、ウデ、カオホシツ など）。まずカタカナとして1文字ずつ読み、下の「部位の一覧」の（）のカタカナと照らして、一覧の表記（頭、顔、からだ、顔保湿 など）で書く。一覧にない部位はカルテの書き方のまま。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
+- 薬の名前は、その行の先頭に書かれた薬の略記を1文字ずつ読んで決め、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など。一覧の（）の中が略記）。数量や部位から薬を推測しない。一覧にない薬はカルテの書き方のまま。
+- 外用の数量は「2本」「50g×3」。混合軟膏（サヘパ・ベタヘパ・ロヘパ・クロヘパ・サZ・ベZ・ロZ・クロZ）は「サヘパ -3」「ベタヘパ -2×2」のように書く（-数字は容器の番号、×は個数）。
+- 用法（2×N・1×タ など）と日数（14TD など）が書いてある行は、のみ薬（錠剤・カプセル）。1日量は 2T・1C のように書く。
+- 部位は括弧の中に、カタカナ・ひらがな・漢字をまぜて書いてある（アタマ、カオ、カラダ、ウデ、クビ、からだ、うで、カオホシツ など）。部位は、ほとんどが下の「部位の一覧」のどれか（一覧にない新しい部位は数％だけ）。次の順で決める。
+  1. 括弧の中を1文字ずつ読む。
+  2. 読めた字を「部位の一覧」と照らし、当てはまるものを一覧の表記で書く（カオ→顔、カラダ→からだ、カオホシツ→顔保湿）。読めない字があっても、読めた部分から当てはまるものを選ぶ（例: 「下〇」なら下肢。「体〇〇〇ところ」なら 体かゆいところ・体わるいところ のうち字の形と字数が合うほう）。
+  3. 読めない字を推測で補ったときは、部位の後ろに ? を付ける（例: (〈部位〉?)）。はっきり読めたときは付けない。
+  4. 一覧のどれとも合わない言葉や、一覧の言葉に別の言葉が付け足されているとき（左右・場所・症状などが付いたもの）は、新しい部位なので、一覧の言葉に置き換えず読んだとおりに書く。
+  括弧のすぐ後ろに続けて書いた言葉も部位に含める（(〈部位〉) 〈言葉〉 → (〈部位〉〈言葉〉)）。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
 - 回数の指示（1日1→日1、1日2→日2、夜1、1日数回→日数）が書いてあれば最後に付ける。書いていなければ付けない。
-- 内服は「1日量 用法 日数」（例 2T 2×N 14TD、1T 1×タ 28TD、1T 1×朝 14TD）。
+- 内服は「1日量 用法 日数」（2T 2×N 14TD、1T 1×タ 28TD、1C 1×朝 14TD など）。
+- 内服の薬をいくつか括弧や線でまとめて、用法と日数を1つだけ書いてあるときは（同じ袋に入れる）、薬を1行ずつ1日量まで書き、その下に用法と日数を1行で書く（〈薬A〉 3T ／ 〈薬B〉 3T ／ 3×N 28TD の3行）。
 - 「しみ3つ」などのセット名は「しみ3つ 3×N 60TD」のように書く。
-- 「(S)」や「処置」の欄（B-1 など）は処置なので出力しない。線で消された行も出力しない。日付・医師の印は出力しない。日付が写っていたら、いちばん下の日付より下の処方だけを出力する（上は前回の処方）。
+- 「(S)」や「処置」の欄（B-1 など）は処置なので出力しない。検査の結果（KOH(−) など）や説明の文も出力しない。線で消された行も出力しない。日付・医師の印は出力しない。日付が写っていたら、いちばん下の日付より下の処方だけを出力する（上は前回の処方）。
 - 読めない字も、一覧と皮膚科の処方として最もありそうなものを推測して必ず埋める。
 
 部位の一覧: ${v.sites.join("、")}
@@ -108,13 +114,32 @@ function take(model) {
   return start(model);
 }
 
-// buf: JPEG の中身。戻り値 { text, ms, outTok }
-function readImage(buf, model, timeoutMs) {
+// 見本（このクリニックのカルテの処方欄 <名前>.jpg と、正しい読み取り <名前>.txt）を読み込む。フォルダがなければ見本なし
+function loadExamples(dir) {
+  dir = dir || path.join(__dirname, "examples");
+  try {
+    return fs.readdirSync(dir).filter(f => /\.jpe?g$/i.test(f)).sort().map(f => {
+      const t = path.join(dir, f.replace(/\.jpe?g$/i, ".txt"));
+      return fs.existsSync(t) ? { name: f, buf: fs.readFileSync(path.join(dir, f)), text: fs.readFileSync(t, "utf8").trim() } : null;
+    }).filter(e => e && e.text);
+  } catch (e) { return []; }
+}
+
+const jpeg = buf => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } });
+
+// buf: JPEG の中身。examples: このクリニックのカルテの見本 [{ buf, text }]（字のくせを覚えさせる）。
+// own: スマホの薬・部位の一覧 { drugs, sites }（なければ初期データ）。戻り値 { text, ms, outTok }
+function readImage(buf, model, timeoutMs, examples, own) {
   const c = take(model);
   return new Promise((resolve, reject) => {
-    const msg = { type: "user", message: { role: "user", content: [
-      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } },
-      { type: "text", text: prompt() }] } };
+    const content = [];
+    if (examples && examples.length) {
+      content.push({ type: "text", text: `まず、このクリニックの医師の字のくせを覚えてください。次の${examples.length}枚は、同じクリニックのカルテの処方欄と、その正しい読み取りです（同じ言葉は同じように崩して書かれます）。` });
+      examples.forEach((e, i) => { content.push(jpeg(e.buf), { type: "text", text: `見本${i + 1}の正しい読み取り:\n${e.text}` }); });
+      content.push({ type: "text", text: "ここからが読み取る画像です。見本の字のくせを参考に読んでください。" });
+    }
+    content.push(jpeg(buf), { type: "text", text: prompt(own) });
+    const msg = { type: "user", message: { role: "user", content } };
     const t0 = Date.now();
     const timer = setTimeout(() => { c.p.kill(); reject(new Error("時間がかかりすぎたので中止しました")); }, timeoutMs || 180000);
     c.closed.then(() => {
@@ -131,4 +156,4 @@ function readImage(buf, model, timeoutMs) {
     c.p.stdin.write(JSON.stringify(msg) + "\n"); c.p.stdin.end();
   });
 }
-module.exports = { readImage, warm, prompt, claudeExe, EFFORT };
+module.exports = { readImage, warm, prompt, claudeExe, loadExamples, EFFORT };

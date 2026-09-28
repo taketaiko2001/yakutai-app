@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-28b";
+const APP_VERSION = "2026-09-28c";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -130,8 +130,12 @@ async function readPhoto() {
         applyParsed(res);
         renderReadRows();
         const dn = doctorName(S.doctor);
-        st.hidden = false; st.className = "status";
-        st.textContent = `PCのClaudeで読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。`;
+        const nGuess = S.bags.filter(b => b.siteFlag === "guess" && b.uncertain.includes("site")).length;
+        const nNew = S.bags.filter(b => b.siteFlag === "new" && b.uncertain.includes("site")).length;
+        st.hidden = false; st.className = "status" + (nGuess || nNew ? " warn" : "");
+        st.textContent = `PCのClaudeで読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。` +
+          (nGuess ? `部位を推測した袋が ${nGuess} 袋あります（黄色）。` : "") + (nNew ? `一覧にない部位の袋が ${nNew} 袋あります（水色・新しい部位かもしれません）。` : "") +
+          (nGuess || nNew ? "印刷した袋をカルテと見比べてください。" : "");
         if (Store.data.settings.autoPdf !== false && S.bags.length) {
           busy(false);
           if (await buildPdfs()) Store.learnConfident(S.bags, curDoctor());
@@ -184,8 +188,12 @@ async function readViaPC() {
   const url = image.toDataURL("image/jpeg", 0.88);
   $("#sentImg").src = url; $("#sentBox").hidden = false;
   busy(true, "PCのClaudeで読んでいます…");
-  const blob = await (await fetch(url)).blob();
-  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+  // 端末の薬・部位の一覧（追加・修正したものを含む）もいっしょに送り、Claude がその中から選べるようにする
+  const d = Store.data;
+  const body = JSON.stringify({ image: url,
+    drugs: d.drugs.filter(x => x.adopted || x.common).map(x => ({ name: x.name, aliases: x.aliases || [], adopted: true })),
+    sites: d.sites.map(x => ({ label: x.label, aliases: x.aliases || [] })) });
+  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "application/json" }, body });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.text) throw new Error(j.error || "PCから返事がありません");
   const text = j.text.split("\n").map(s => s.replace(/^[-・*\s]+/, "").trim()).filter(Boolean).join("\n");
@@ -342,7 +350,7 @@ function chipGroup(i, key, options, selected, multi, unsure) {
   }).join("") + "</span>";
 }
 function inp(b, key, cls, ph) {
-  return `<input class="${cls || ""}${b.uncertain.includes(key) ? " unsure" : ""}" data-key="${key}" value="${esc(b[key])}" ${ph ? `placeholder="${esc(ph)}"` : ""} ${cls === "wide-in" ? "" : 'inputmode="text"'}>`;
+  return `<input class="${cls || ""}${b.uncertain.includes(key) ? " unsure" : ""}${key === "site" && b.siteFlag === "new" ? " new-site" : ""}" data-key="${key}" value="${esc(b[key])}" ${ph ? `placeholder="${esc(ph)}"` : ""} ${cls === "wide-in" ? "" : 'inputmode="text"'}>`;
 }
 function bagCard(b, i) {
   const title = b.type === "naifuku" ? "のみぐすり" : "外用薬";
@@ -363,7 +371,8 @@ function bagCard(b, i) {
   }
   const info = [`<b>薬</b> ${esc((b.drugs || []).join("、") || "（未入力）")}`];
   if (b.comment) info.push(`<b>メモ</b> ${esc(b.comment)}`);
-  if (b.uncertain.length) info.push(`<span style="color:#7a5b00">黄色の欄は自動で推測した項目です。カルテで確認してください。</span>`);
+  if (b.siteFlag === "new" && b.uncertain.includes("site")) info.push(`<span style="color:#1d5f99">水色の部位は一覧にない言葉です（新しい部位かもしれません）。カルテで確認してください。</span>`);
+  if (b.uncertain.some(k => k !== "site" || b.siteFlag !== "new")) info.push(`<span style="color:#7a5b00">黄色の欄は自動で推測した項目です。カルテで確認してください。</span>`);
   return `<div class="bag ${b.type}" data-idx="${i}">
     <div class="bag-head"><span class="bag-title">袋${i + 1} ${title}</span>${seg}</div>
     <div class="size-reason">${b.sizeReason ? "サイズの理由: " + esc(b.sizeReason) : "サイズ: ルールに当てはまらないため小さい袋"}</div>
@@ -393,7 +402,8 @@ function onBagInput(e) {
   else b[key] = toHalf(t.value);
   if (b.uncertain.includes(key)) {
     b.uncertain = b.uncertain.filter(k => k !== key);
-    t.classList.remove("unsure");
+    t.classList.remove("unsure", "new-site");
+    if (key === "site") b.siteFlag = "";
     const g = t.closest(".chips"); if (g) g.classList.remove("unsure");
   }
   if (rerender) renderBags();
@@ -450,8 +460,9 @@ function renderPreview() {
   const UNS = { site: "部位", times: "回数", days: "日数", tablet: "1回量", capsule: "1回量", powder: "1回量", timing: "時点", meal: "食事" };   // 印字される項目だけ（薬の名前は印字しない）
   const html = S.bags.map((b, i) => {
     const sz = L.sizes[b.size];
-    const u = [...new Set(b.uncertain.map(k => UNS[k]).filter(Boolean))];
-    return `<div class="pv"><div class="pv-cap">袋${i + 1}（${b.size === "A5" ? "大" : "小"}）${u.length ? `<span class="pv-warn">推測: ${esc(u.join("・"))}</span>` : ""}</div>
+    const isNew = b.siteFlag === "new" && b.uncertain.includes("site");
+    const u = [...new Set(b.uncertain.filter(k => !(isNew && k === "site")).map(k => UNS[k]).filter(Boolean))];
+    return `<div class="pv"><div class="pv-cap">袋${i + 1}（${b.size === "A5" ? "大" : "小"}）${u.length ? `<span class="pv-warn">推測: ${esc(u.join("・"))}</span>` : ""}${isNew ? `<span class="pv-new">新しい部位</span>` : ""}</div>
       <div class="pv-frame" style="width:${(sz.width_mm * PX_PER_MM * scale).toFixed(1)}px;height:${(sz.height_mm * PX_PER_MM * scale).toFixed(1)}px">
       <div class="pv-inner" style="transform:scale(${scale.toFixed(4)})">${YakutaiRender.renderPage(b, common, L, { art: true, noOffset: true })}</div></div></div>`;
   }).join("");

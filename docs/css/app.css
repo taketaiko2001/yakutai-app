@@ -94,6 +94,8 @@ details.sub summary { cursor: pointer; font-size: 14px; color: var(--accent); fo
 .f input { width: 3.6em; text-align: center; padding: 6px 4px; }
 .f input.wide-in { width: 9em; text-align: left; }
 .unsure { background: var(--warn-bg) !important; border-color: var(--warn-line) !important; }
+/* 一覧にない部位（新しい部位かもしれない）は水色で、推測（黄色）と見分ける */
+.unsure.new-site { background: #dff1ff !important; border-color: #3a8fd6 !important; }
 .chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .chip { position: relative; }
 .chip input { position: absolute; opacity: 0; pointer-events: none; width: 1px; }
@@ -108,6 +110,7 @@ details.sub summary { cursor: pointer; font-size: 14px; color: var(--accent); fo
 .pv { flex: none; }
 .pv-cap { font-size: 12px; color: var(--muted); }
 .pv-warn { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px; background: #fff3c4; color: #7a5b00; }
+.pv-new { display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px; background: #dff1ff; color: #1d5f99; }
 .pv-frame { border: 1px solid var(--line); background: #fff; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 .pv-inner { transform-origin: top left; }
 .pv .yt-art { opacity: .28; }

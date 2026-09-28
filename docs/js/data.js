@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 11,
+ "version": 13,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -1390,6 +1390,19 @@ window.DEFAULT_DATA = {
    "common": true
   },
   {
+   "name": "デュタステリドカプセル",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "デュタステリド",
+    "ザガーロ",
+    "でゅたすてりど"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
    "name": "ネイリンカプセル",
    "type": "naifuku",
    "form": "カプセル",
@@ -1547,6 +1560,19 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ロラタジンDS",
     "クラリチンDS"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "ケフラールカプセル",
+   "type": "naifuku",
+   "form": "カプセル",
+   "times": "",
+   "aliases": [
+    "ケフラール",
+    "セファクロル",
+    "けふらーる"
    ],
    "note": "",
    "adopted": true
@@ -2000,6 +2026,20 @@ window.DEFAULT_DATA = {
    "site": "顔"
   },
   {
+   "name": "フェナゾール軟膏",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "フェナゾール",
+    "フェナゾールo",
+    "ウフェナマート",
+    "ふぇなぞーる"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
    "name": "ボアラ軟膏",
    "type": "gaiyou",
    "form": "ぬり薬",
@@ -2045,6 +2085,22 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ラピフォート",
     "らぴふぉーと"
+   ],
+   "note": "",
+   "adopted": true
+  },
+  {
+   "name": "リンデロンVクリーム",
+   "type": "gaiyou",
+   "form": "ぬり薬",
+   "times": "2",
+   "aliases": [
+    "RVcn",
+    "RVcr",
+    "Vクリーム",
+    "リンデロンV",
+    "リンデロンVcn",
+    "ベタメタゾン吉草酸エステルクリーム"
    ],
    "note": "",
    "adopted": true
@@ -2501,6 +2557,69 @@ window.DEFAULT_DATA = {
     "手のおやゆび",
     "手のオヤユビ",
     "てのおやゆび"
+   ]
+  },
+  {
+   "label": "体しっしん",
+   "aliases": [
+    "カラダシッシン",
+    "体シッシン",
+    "からだしっしん",
+    "体湿疹"
+   ]
+  },
+  {
+   "label": "顔しっしん",
+   "aliases": [
+    "カオシッシン",
+    "顔シッシン",
+    "かおしっしん",
+    "顔湿疹"
+   ]
+  },
+  {
+   "label": "足皮むけ",
+   "aliases": [
+    "アシカワムケ",
+    "足カワムケ",
+    "あしかわむけ",
+    "足皮ムケ"
+   ]
+  },
+  {
+   "label": "口内炎",
+   "aliases": [
+    "コウナイエン",
+    "こうないえん"
+   ]
+  },
+  {
+   "label": "足水虫",
+   "aliases": [
+    "アシミズムシ",
+    "あしみずむし",
+    "足ミズムシ"
+   ]
+  },
+  {
+   "label": "トビヒ",
+   "aliases": [
+    "とびひ"
+   ]
+  },
+  {
+   "label": "ハラ",
+   "aliases": [
+    "はら",
+    "腹",
+    "おなか"
+   ]
+  },
+  {
+   "label": "くち",
+   "aliases": [
+    "クチ",
+    "口"
    ]
   }
  ],

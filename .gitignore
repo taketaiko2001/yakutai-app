@@ -3,3 +3,6 @@ samples_private/
 test/
 fonts_src/
 0_スマホで開くQRコード.png
+
+# PCで読むときの見本（実際のカルテの処方欄。PCの中だけに置く）
+pc/examples/

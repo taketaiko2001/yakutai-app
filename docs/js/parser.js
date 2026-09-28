@@ -83,15 +83,38 @@
     if (second && scored[0][0] - second[0] < 0.05 && second[1].name !== scored[0][1].name) conf = Math.min(conf, 0.7);
     return [scored[0][1], conf];
   }
+  // 部位を一覧と照らす。戻り値 [印字する部位, 自信, 種類]
+  //  種類 "exact": 一覧の言葉そのもの / "guess": 一部が違う → 一覧のいちばん近い言葉（推測。確認してもらう）
+  //       "new": 一覧にない言葉、または一覧の言葉に何か付け足したもの（例: 左下腿キズ・股・顔かゆいところ・体・手）→ 書かれたとおり
   function matchSite(text, sites) {
     const q = fuzzkey(text);
-    if (!q) return ["", 0];
-    let best = null, score = 0;
+    if (!q) return ["", 0, ""];
+    let best = null, score = 0, key = "";
     for (const s of sites) {
-      const v = Math.max(...s.keys.map(k => similarity(q, k)));
-      if (v > score) { best = s; score = v; }
+      for (const k of s.keys) { const v = similarity(q, k); if (v > score) { best = s; score = v; key = k; } }
     }
-    return best && score >= 0.75 ? [best.label, score] : [text.trim(), 0];
+    if (!best || score < 0.75) return [text.trim(), 0, "new"];
+    if (score === 1) return [best.label, 1, "exact"];
+    if (lcs(q, key) === key.length && q.length > key.length) return [text.trim(), 0, "new"];
+    return [best.label, score, "guess"];
+  }
+  const RE_GUESS_MARK = /\s*[?？]+\s*$/;   // 読み取りで「推測した」印（例: (体かゆいところ?)）
+  // 袋に部位を入れる。推測したもの（siteFlag "guess"）と一覧にない新しい部位（"new"）は、確認してもらうため印を付ける
+  function setSite(bag, text, sites, orig) {
+    const marked = RE_GUESS_MARK.test(text);
+    text = text.replace(RE_GUESS_MARK, "");
+    orig = String(orig || "").replace(RE_GUESS_MARK, "").trim();
+    const [site, , kind] = matchSite(text, sites);
+    bag.siteFlag = ""; bag.siteNote = "";
+    if (!kind) { bag.site = ""; return; }
+    if (kind === "new") {
+      bag.site = orig && fuzzkey(orig) === fuzzkey(text) ? orig : site;
+      bag.siteFlag = "new"; bag.siteNote = "一覧にない部位です（新しい部位かもしれません）";
+      bag.uncertain.push("site");
+    } else if (kind === "guess" || marked) {
+      bag.site = site; bag.siteFlag = "guess"; bag.siteNote = `部位を推測しました（読み: ${orig || text.trim()}）`;
+      bag.uncertain.push("site");
+    } else bag.site = site;
   }
 
   // ---------------------------------------------------------------- 1行の解析
@@ -118,8 +141,8 @@
   const RE_CONTAINERS = /(\d+(?:\.\d+)?)\s*(?:g|本)?\s*[×x]\s*(\d+)(?!\s*(?:回|日|td))/;  // 混合容器「3×2」= 3番の容器を2個
   const RE_PAREN = /[(（]\s*([^)）]*)[)）]?/;
   const RE_RP = /^\s*[^\s(（]{1,3}\)\s*/;   // 「Rp)」とそのOCR読み違い
-  // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)）。部位ではないので読み飛ばす
-  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|乳剤?性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ)\s*[)）]?/g;
+  // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)、ベZ（混合軟膏））。部位ではないので読み飛ばす
+  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|乳剤?性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ|混合軟膏)\s*[)）]?/g;
   // チューブの大きさ（例: ヘパcr(25)＝25gのチューブ）と年齢（例: (12才)）。部位ではないので読み飛ばす
   const RE_TUBE_NOTE = /[(（]\s*(?:5|10|15|20|25|30|50|100)\s*g?\s*[)）]/g;
   const RE_AGE_NOTE = /[(（]\s*\d{1,3}\s*[才歳][)）]?/g;
@@ -196,7 +219,7 @@
     return { type, drugs: [], drug_names: [], source: "", times: "", days: "", powder: "", capsule: "", tablet: "",
       dose_note: "", timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "",
       tonpuku_when: [], kind: "", site: "", zayaku_temp: "", qty: null, unit: "", containers: 0,
-      uncertain: [], comment: "", unknown_drug: "" };
+      uncertain: [], comment: "", unknown_drug: "", siteFlag: "", siteNote: "" };
   }
 
   // ---------------------------------------------------------------- 全体
@@ -306,10 +329,10 @@
         }
         if (pm && lastGaiyou && (!lastGaiyou.site || lastGaiyou.uncertain.includes("site")) && RE_JP2.test(pm[1].replace(RE_TIMES_ANY, ""))) {
           const inner = pm[1].replace(RE_TIMES_ANY, "").trim();
-          const [site, sconf] = matchSite(inner, sites);
-          lastGaiyou.site = site;
           lastGaiyou.uncertain = lastGaiyou.uncertain.filter(x => x !== "site");
-          if (!sconf) lastGaiyou.uncertain.push("site");
+          setSite(lastGaiyou, inner, sites, null);
+          const site = lastGaiyou.site;
+          if (lastGaiyou.siteNote) lastGaiyou.comment = [lastGaiyou.comment, lastGaiyou.siteNote].filter(Boolean).join("・");
           let tk = timesToken(norm(line));
           const fx = lastGaiyou._drug && lastGaiyou._drug.fixedTimes;
           if (fx) tk = null;
@@ -529,9 +552,12 @@
     siteText = siteText.replace(RE_TIMES_ANY, "").replace(/^[\s　・]+|[\s　・]+$/g, "");
     if (isDitto(siteText)) { bag._ditto = true; siteText = ""; }
     if (siteText) {
-      const [site, sconf] = matchSite(siteText, sites);
-      bag.site = site;
-      if (!sconf) uns.add("site");
+      // 一覧にない部位は、カルテの書き方（ひらがな・漢字）のまま印字する
+      const om = pm && String(line || "").match(RE_PAREN);
+      const orig = om ? om[1].replace(RE_TIMES_ANY, "").replace(/^[\s　・]+|[\s　・]+$/g, "") : "";
+      setSite(bag, siteText, sites, orig);
+      if (bag.uncertain.includes("site")) { uns.add("site"); bag.uncertain = []; }
+      if (bag.siteNote) notes.push(bag.siteNote);
     } else if (!bag._ditto) {
       const lu = learnedGaiyou(drug.name, learn);
       if (lu && lu.site) { bag.site = lu.site; uns.add("site"); notes.push("部位の記載なし → よく使う部位"); }
