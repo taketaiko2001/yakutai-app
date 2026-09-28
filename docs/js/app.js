@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-26k";
+const APP_VERSION = "2026-09-28a";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -116,9 +116,12 @@ async function readPhoto() {
     const keep = KarteReader.keepChars(KarteReader.buildLexicon(d, d.learn));
     const t0 = performance.now();
     $("#sentBox").hidden = true;
-    // PC から開いているときは、処方の部分だけを PC の Claude に読ませる（読めなければスマホの中で読む）
+    // PC から開いているときは、処方の部分だけを PC の Claude に読ませる（読めなければスマホの中で読み、理由を表示する）
+    let why = "";
+    if (location.protocol === "http:" && !S.pc) await checkPC();   // PC の再起動などで一度つながらなくても、読むたびに確かめ直す
     if (S.pc) {
-      const r = await readViaPC().catch(e => { toast("PCで読めませんでした（" + e.message + "）。スマホの中で読みます"); return null; });
+      const r = await readViaPC().catch(e => { why = `PCで読めなかったので（${e.message}）`; return null; });
+      if (!r && !why) why = "カルテの日付が見つからなかったので（名前を送らないため。日付が写るように撮り直してください）";
       if (r) {
         S.doctor = r.doctor;
         S.readLines = []; S.ocrInitial = []; S.lex = null;
@@ -136,7 +139,7 @@ async function readPhoto() {
         }
         return;
       }
-    }
+    } else if (location.protocol === "http:") why = "PCにつながらなかったので（PCの黒い画面「薬袋プリント（PCで読む）」が開いているか確かめてください）";
     const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), keep, S.rect);
     // 医師の印が読めたらその医師に切り替え、その医師の癖（よく使う薬・部位、読み違いの傾向）で判定する
     S.doctor = detectDoctor(KarteReader.makeRows(items)) || "";
@@ -155,15 +158,17 @@ async function readPhoto() {
     renderReadRows();
     const unsure = lines.filter(l => l.kind === "raw" || /？$/.test(l.text)).length;
     st.hidden = false;
-    st.className = "status" + (unsure ? " warn" : "");
+    st.className = "status" + (unsure || why ? " warn" : "");
     const dn = doctorName(S.doctor);
-    st.textContent = `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。` +
+    st.textContent = (why ? `⚠ ${why}、スマホの中で読みました。スマホの読み取りは精度が低いので、印刷は自動で始めません。` : "") +
+      `読み取りました（${((performance.now() - t0) / 1000).toFixed(0)}秒・薬袋 ${res.bags.length} 袋分${dn ? "・医師 " + dn : ""}）。` +
+      (location.protocol === "https:" ? "スマホの中で読みました（PCのClaudeで読むときは、QRコードのアドレスから開いてください）。" : "") +
       (unsure ? `自信のない行が ${unsure} 行あります（印刷した袋をカルテと見比べてください。直すときは下の「読み取った行」で）。` : "");
     // 読み取ったらそのまま印刷用PDFまで作る（操作なしで印刷へ）
     if (Store.data.settings.autoPdf !== false && S.bags.length) {
       busy(false);
       if (await buildPdfs()) Store.learnConfident(S.bags, curDoctor());   // 自信を持って読めた袋だけ覚える（精度を上げていく）
-      tryAutoShare();
+      if (!why) tryAutoShare();   // PC で読むはずがスマホで読んだときは、見直してもらうため印刷に回さない
     }
   } catch (e) {
     st.hidden = false; st.className = "status warn";
@@ -175,7 +180,7 @@ async function readPhoto() {
 // 日付の行が見つからないときは何も送らない（null を返し、スマホの中で読む）
 async function readViaPC() {
   const { image, dateText } = await LocalOCR.prescriptionImage(S.photo, msg => busy(true, msg), S.rect);
-  if (!image) { toast("カルテの日付が見つからないので、PCには送らずスマホの中で読みます"); return null; }
+  if (!image) return null;
   const url = image.toDataURL("image/jpeg", 0.88);
   $("#sentImg").src = url; $("#sentBox").hidden = false;
   busy(true, "PCのClaudeで読んでいます…");
@@ -189,7 +194,7 @@ async function readViaPC() {
 // PC のサーバーから開いているか（http のときだけ確かめる）
 async function checkPC() {
   if (location.protocol !== "http:") return;
-  try { const r = await fetch("/api/ping"); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
+  try { const r = await fetch("/api/ping", { signal: AbortSignal.timeout(4000) }); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
   if (S.pc) toast("PCで読むモードです（処方の部分だけをPCのClaudeで読みます）");
 }
 
