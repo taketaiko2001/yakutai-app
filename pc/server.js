@@ -6,7 +6,8 @@ const http = require("http"), fs = require("fs"), path = require("path"), os = r
 const { readImage, warm, claudeExe, EFFORT } = require("./claude_read.js");
 
 const PORT = +process.env.PORT || 8787;
-const MODEL = process.env.CLAUDE_MODEL || "sonnet";
+// 手書きの読み取りは Opus が大きく上回る（サンプル35枚で sonnet 43% / Opus 84%）
+const MODEL = process.env.CLAUDE_MODEL || "opus";
 const ROOT = path.join(__dirname, "..", "docs");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json", ".webmanifest": "application/manifest+json", ".png": "image/png",
@@ -19,7 +20,8 @@ function isLocal(ip) {
 }
 
 let queue = Promise.resolve();   // 1枚ずつ順に読む
-function readQueued(buf) { const p = queue.then(() => readImage(buf, MODEL)); queue = p.catch(() => {}); return p; }
+// 一時的に失敗することがあるので、1回だけ読み直す
+function readQueued(buf) { const p = queue.then(() => readImage(buf, MODEL).catch(() => readImage(buf, MODEL))); queue = p.catch(() => {}); return p; }
 
 const server = http.createServer((req, res) => {
   if (!isLocal(req.socket.remoteAddress)) { res.writeHead(403); return res.end(); }

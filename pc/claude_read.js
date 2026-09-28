@@ -23,16 +23,21 @@ function claudeExe() {
 
 function vocab() {
   const drugs = D.drugs.filter(d => d.adopted || d.common).map(d => `${d.name}${d.aliases && d.aliases.length ? "（" + d.aliases.filter(a => !/^[ぁ-ん]+$/.test(a)).slice(0, 5).join("・") + "）" : ""}`);
-  const sites = D.sites.map(s => s.name || s);
+  // 部位は label が正式な書き方。カルテはカタカナで書くので、カタカナの書き方を（）で添える
+  const sites = D.sites.map(s => { const k = (s.aliases || []).filter(a => /^[ァ-ヶー・]+$/.test(a)); return s.label + (k.length ? "（" + k.join("・") + "）" : ""); });
   const sets = (D.sets || []).map(s => s.name || s);
   return { drugs, sites, sets };
 }
 
 function prompt() {
   const v = vocab();
-  return `皮膚科の手書きカルテの「処方」欄の画像です（処方以外の部分は白く消してあります）。書かれている処方を読み取って、下の形式で1薬1行で出力してください。説明や前置きは書かず、処方の行だけを出力します。
+  return `皮膚科の手書きカルテの「処方」欄の画像です（処方以外の部分は白く消してあります）。${TWO_STEP ? `書かれている処方を読み取って、次の2つだけを出力してください（説明や前置きは書かない）。
+【読み】 カルテに書いてあるとおりに（略記・カタカナ・数字のまま）1行ずつ書き写す
+【処方】 【読み】を下の形式に直したもの（1薬1行）
 
-出力の形式（例）:
+【処方】の形式（例）:` : `書かれている処方を読み取って、下の形式で1薬1行で出力してください。説明や前置きは書かず、処方の行だけを出力します。
+
+出力の形式（例）:`}
 ヘパリン類似物質ローション 2本 (顔保湿)
 クリンダマイシンゲル 2本 (顔ニキビ) 日2
 クレナフィン爪外用液 1本 (爪) 夜1
@@ -47,11 +52,11 @@ function prompt() {
 ルール:
 - 薬の名前は、その行の先頭に書かれた薬の略記を読んで決め、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など。一覧の（）の中が略記）。数量や部位から薬を推測しない。一覧にない薬はカルテの書き方のまま。
 - 外用の数量は「2本」「50g×3」、混合軟膏は「サヘパ -3」「ベタヘパ -2×2」（-数字は容器の番号、×は個数）。
-- 部位は括弧の中を読み、下の「部位の一覧」から最も近いものを選んで、一覧の表記そのままで書く（カルテはカタカナ・ひらがな: カオホシツ＝顔保湿、カオニキビ＝顔ニキビ、アタマ＝頭、オヤユビ など）。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
+- 部位は括弧の中に、ほとんどカタカナで書いてある（アタマ、カオ、カラダ、クビ、テ、アシ、ウデ、カオホシツ など）。まずカタカナとして1文字ずつ読み、下の「部位の一覧」の（）のカタカナと照らして、一覧の表記（頭、顔、からだ、顔保湿 など）で書く。一覧にない部位はカルテの書き方のまま。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
 - 回数の指示（1日1→日1、1日2→日2、夜1、1日数回→日数）が書いてあれば最後に付ける。書いていなければ付けない。
 - 内服は「1日量 用法 日数」（例 2T 2×N 14TD、1T 1×タ 28TD、1T 1×朝 14TD）。
 - 「しみ3つ」などのセット名は「しみ3つ 3×N 60TD」のように書く。
-- 「(S)」や「処置」の欄（B-1 など）は処置なので出力しない。線で消された行も出力しない。日付・医師の印は出力しない。
+- 「(S)」や「処置」の欄（B-1 など）は処置なので出力しない。線で消された行も出力しない。日付・医師の印は出力しない。日付が写っていたら、いちばん下の日付より下の処方だけを出力する（上は前回の処方）。
 - 読めない字も、一覧と皮膚科の処方として最もありそうなものを推測して必ず埋める。
 
 部位の一覧: ${v.sites.join("、")}
@@ -60,8 +65,10 @@ function prompt() {
 }
 
 // 考える深さ。標準(xhigh)だと手書きで考え込み 1枚 60〜100秒かかる。
-// high: 1枚 約5〜10秒（必要なときだけ少し考える） / medium: 少し速い
-const EFFORT = process.env.CLAUDE_EFFORT || "high";
+// サンプル35枚（Opus）: low 84%・約7秒 / medium 86%・約10秒（sonnet は medium でも 43%）
+const EFFORT = process.env.CLAUDE_EFFORT || "low";
+// 先に【読み】（カルテのまま書き写し）を出させてから【処方】（正式名に直したもの）を出させる方式
+const TWO_STEP = process.env.CLAUDE_TWO_STEP === "1";   // 試した結果、精度は上がらなかった（標準は使わない）
 
 // Claude を起動する（画像はまだ渡さない）。起動に 2秒ほどかかるので、次の1枚のぶんを先に起動して待たせておく
 function start(model) {
@@ -71,6 +78,7 @@ function start(model) {
     // PC の Claude Code の設定・接続先（MCP）・コマンドは読み込まない（速くするため・画像をほかへ渡さないため）
     "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands"];
   if (model) args.push("--model", model);
+  if (model === "opus") args.push("--fallback-model", "sonnet");   // Opus が混み合っているときだけ sonnet で読む
   // 有料の API キーが設定されていても使わない（サブスクリプションで動かす）
   const env = Object.assign({}, process.env);
   delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
@@ -115,7 +123,10 @@ function readImage(buf, model, timeoutMs) {
       const ev = c.out.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
       const res = ev.find(e => e.type === "result");
       if (!res || res.is_error) return reject(new Error(res ? String(res.result || "読み取りに失敗しました").slice(0, 200) : `Claude を起動できませんでした（${c.done.code}）${c.err.slice(0, 200)}`));
-      resolve({ text: String(res.result || "").trim(), ms: Date.now() - t0, outTok: res.usage && res.usage.output_tokens });
+      let text = String(res.result || "");
+      const k = text.lastIndexOf("【処方】");
+      if (k >= 0) text = text.slice(k + 4);
+      resolve({ text: text.trim(), ms: Date.now() - t0, outTok: res.usage && res.usage.output_tokens });
     });
     c.p.stdin.write(JSON.stringify(msg) + "\n"); c.p.stdin.end();
   });

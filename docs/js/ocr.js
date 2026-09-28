@@ -274,25 +274,77 @@
   //  ・文字の行（検出した枠）だけを写し、ほかは白で塗りつぶす
   //  ・日付の行が見つからなければ何も作らない（送らない）
   // 戻り値: { image: 送るキャンバス or null, dateText: 日付の行の文字（医師の印の判定用。送らない） }
-  async function prescriptionImage(img, onProgress, rect) {
+  // 読んだ文字から「令和の 年.月.日」を取り出す（医師の印が続けて読まれた 8.9.267 なども 8.9.26 とみる）。
+  // 戻り値: 今日から何日前か（日付でなければ null）
+  function daysAgo(t, today) {
+    let best = null;
+    const ry = today.getFullYear() - 2018;   // 今の令和の年
+    const add = (y, mo, d) => {
+      if (!(y >= 1 && y <= 40 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return;
+      let ago = Math.round((today - new Date(2018 + y, mo - 1, d)) / 864e5);
+      // 年だけ読み違えた（8 → 3 など）ときは、月日が今日から7日以内なら今日の記載とみる（生年月日などを拾わないよう狭くする）
+      if (y !== ry && y !== ry - 1) {
+        const a = Math.round((today - new Date(2018 + ry, mo - 1, d)) / 864e5);
+        ago = a >= -1 && a <= 7 ? a : 9999;
+      }
+      if (best === null || Math.abs(ago) < Math.abs(best)) best = ago;
+    };
+    t = t.replace(/\s+/g, "");
+    for (const m of t.matchAll(/(\d{1,4})[.,·・](\d{1,2})[.,·・](\d{1,3})/g)) {
+      const d = +m[3].slice(0, 2);
+      add(+m[1].slice(-2), +m[2], d > 31 ? +m[3][0] : d);
+    }
+    // 日が読めなかったとき（8.9.c）は、年が今年で月が今月か先月なら今日の記載とみる
+    for (const m of t.matchAll(/(\d{1,2})[.,·・](\d{1,2})[.,·・](?!\d)/g)) {
+      const y = +m[1], mo = +m[2], back = (today.getMonth() + 1 - mo + 12) % 12;
+      if (y === ry && mo >= 1 && mo <= 12 && back <= 1 && (best === null || Math.abs(best) > 31)) best = back ? 31 : 0;
+    }
+    // 2つめの点が読めなかったとき（8.925 → 8.9.25、8.1025 → 8.10.25）
+    for (const m of t.matchAll(/(\d{1,4})[.,·・](\d{3,4})(?![.,·・\d])/g)) {
+      const y = +m[1].slice(-2), s = m[2];
+      add(y, +s[0], +s.slice(1, 3));
+      if (s.length >= 3) add(y, +s.slice(0, 2), +s.slice(2, 4));
+    }
+    return best;
+  }
+
+  async function prescriptionImage(img, onProgress, rect, dbg, today) {
     await init(onProgress, true);
     const src = toCanvas(img, 2400, 1440, rect);
     onProgress && onProgress("処方の部分を探しています…");
     const boxes = (await detect(src)).sort((a, b) => a.cy - b.cy);
     const readA = async b => { const c = cropUpright(src, b); return c ? (await runRec(recA, dictA, [], [], recTensor(c))).seq.map(x => x.ch).join("").normalize("NFKC") : ""; };
-    const RE_DATE = /(?<!\d)\d{1,2}\s*[.,]\s*\d{1,2}\s*[.,]\s*\d{1,2}(?!\d)/;
+    // 日付の行を探す。今日から2か月以内の日付のうち、いちばん下のもの（今日の記載）を使う。
+    // 古い日付・生年月日のような日付は使わない（その下に名前や住所があるかもしれないので）
+    today = today || new Date();
     let date = null, dateText = "";
-    for (let i = 0; i < Math.min(boxes.length, 25) && !date; i++) {
-      const b = boxes[i];
-      if (b.w < b.h * 1.5) continue;
-      const t = await readA(b);
-      if (RE_DATE.test(t)) { date = b; dateText = t; }
+    if (dbg) dbg.push(`検出 ${boxes.length} 個 画像 ${src.width}x${src.height}`);
+    const cand = boxes.slice(0, 80), memo = new Map();
+    const read = async b => { if (!memo.has(b)) memo.set(b, await readA(b)); return memo.get(b); };
+    const recent = ago => ago !== null && ago >= -2 && ago <= 62;
+    for (const b of cand) {
+      if (b.w < b.h * 1.2) continue;
+      const t = await read(b), ago = daysAgo(t, today);
+      if (dbg) dbg.push(`${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.w)}x${Math.round(b.h)} ${t}${ago !== null ? "  ← " + ago + "日前" : ""}`);
+      if (recent(ago)) { date = b; dateText = t; }
+    }
+    // 見つからなければ、同じ行の右隣の枠とつなげて読む（「8.」と「9.26」に分かれたとき）
+    if (!date) {
+      const rightOf = b => cand.filter(o => o !== b && o.x > b.x + 0.3 * b.w && o.x - b.x2 < 2 * b.h &&
+        Math.min(o.y2, b.y2) - Math.max(o.y, b.y) > 0.4 * Math.min(o.h, b.h)).sort((p, q) => p.x - q.x)[0];
+      for (const b of cand) {
+        const r = rightOf(b);
+        if (!r) continue;
+        const t = await read(b) + await read(r), ago = daysAgo(t, today);
+        if (recent(ago)) { date = b; dateText = t; if (dbg) dbg.push(`つなげて ${t}  ← ${ago}日前`); }
+      }
     }
     if (!date) return { image: null, dateText: "" };
     // 日付と同じ行にある印（イ・K など）もつなげる（医師の判定用。送る画像には入れない）
     const sameRow = b => b !== date && Math.min(b.y2, date.y2) - Math.max(b.y, date.y) > 0.4 * Math.min(b.y2 - b.y, date.y2 - date.y);
     for (const b of boxes.filter(sameRow).filter(b => b.x >= date.x).sort((a, b) => a.x - b.x)) dateText += " " + await readA(b);
-    const left = date.x - 1.5 * (date.x2 - date.x);
+    // 日付の枠が「初診料」などとつながって長いときは、日付の幅を文字の高さから見積もる
+    const left = date.x - 1.5 * Math.min(date.x2 - date.x, 5 * (date.y2 - date.y));
     const keep = boxes.filter(b => b !== date && !sameRow(b) && b.cy > date.y2 && b.cx >= left);
     if (!keep.length) return { image: null, dateText };
     const pad = b => 0.25 * (b.y2 - b.y);
