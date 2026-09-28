@@ -3,7 +3,7 @@
 //  ・/api/read  スマホから「処方の部分だけ」の画像を受け取り、Claude に読ませて結果を返す
 //    画像はファイルに保存しない。読み取った内容も記録しない（時刻と秒数だけ表示）
 const http = require("http"), fs = require("fs"), path = require("path"), os = require("os");
-const { readImage, claudeExe } = require("./claude_read.js");
+const { readImage, warm, claudeExe, EFFORT } = require("./claude_read.js");
 
 const PORT = +process.env.PORT || 8787;
 const MODEL = process.env.CLAUDE_MODEL || "sonnet";
@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
       const t = new Date().toLocaleTimeString("ja-JP");
       try {
         const r = await readQueued(buf);
-        console.log(`${t} 読み取り ${(r.ms / 1000).toFixed(1)}秒`);
+        console.log(`${t} 読み取り ${(r.ms / 1000).toFixed(1)}秒（出力 ${r.outTok} トークン）`);
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ text: r.text, ms: r.ms, model: MODEL }));
       } catch (e) {
@@ -65,5 +65,6 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("薬袋プリント（PCで読む）を起動しました。この画面は閉じないでください。");
   console.log("スマホ（院内のWi-Fi）で次のアドレスを開いてください:");
   for (const ip of ips) console.log(`   http://${ip}:${PORT}/`);
-  console.log(`読み取り: Claude（${MODEL}）  ${claudeExe()}`);
+  console.log(`読み取り: Claude（${MODEL}・effort ${EFFORT}）  ${claudeExe()}`);
+  warm(MODEL);
 });

@@ -42,9 +42,10 @@ function prompt() {
 しみ3つ 3×N 60TD
 ロラタジン錠 1T 1×タ 28TD
 ロキシスロマイシン錠 2T 2×N 14TD
+（例の薬・数量・部位は書き方の見本で、画像の内容とは関係ありません）
 
 ルール:
-- 薬の名前は、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など）。一覧にない薬はカルテの書き方のまま。
+- 薬の名前は、その行の先頭に書かれた薬の略記を読んで決め、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など。一覧の（）の中が略記）。数量や部位から薬を推測しない。一覧にない薬はカルテの書き方のまま。
 - 外用の数量は「2本」「50g×3」、混合軟膏は「サヘパ -3」「ベタヘパ -2×2」（-数字は容器の番号、×は個数）。
 - 部位は括弧の中を読み、下の「部位の一覧」から最も近いものを選んで、一覧の表記そのままで書く（カルテはカタカナ・ひらがな: カオホシツ＝顔保湿、カオニキビ＝顔ニキビ、アタマ＝頭、オヤユビ など）。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
 - 回数の指示（1日1→日1、1日2→日2、夜1、1日数回→日数）が書いてあれば最後に付ける。書いていなければ付けない。
@@ -58,32 +59,65 @@ function prompt() {
 薬の一覧: ${v.drugs.join("、")}`;
 }
 
-// buf: JPEG の中身。戻り値 { text, ms }
+// 考える深さ。標準(xhigh)だと手書きで考え込み 1枚 60〜100秒かかる。
+// high: 1枚 約5〜10秒（必要なときだけ少し考える） / medium: 少し速い
+const EFFORT = process.env.CLAUDE_EFFORT || "high";
+
+// Claude を起動する（画像はまだ渡さない）。起動に 2秒ほどかかるので、次の1枚のぶんを先に起動して待たせておく
+function start(model) {
+  const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+    "--no-session-persistence", "--tools", "", "--system-prompt", "あなたは手書きカルテの処方を正確に書き起こす薬剤師の助手です。",
+    "--effort", EFFORT,
+    // PC の Claude Code の設定・接続先（MCP）・コマンドは読み込まない（速くするため・画像をほかへ渡さないため）
+    "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands"];
+  if (model) args.push("--model", model);
+  // 有料の API キーが設定されていても使わない（サブスクリプションで動かす）
+  const env = Object.assign({}, process.env);
+  delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+  const c = { model, t: Date.now(), out: "", err: "", done: null, p: spawn(claudeExe(), args, { env, cwd: __dirname, windowsHide: true }) };
+  c.closed = new Promise(res => {
+    c.p.on("error", e => { c.done = { error: e }; res(); });
+    c.p.on("close", code => { c.done = c.done || { code }; res(); });
+  });
+  c.p.stdout.on("data", d => c.out += d); c.p.stderr.on("data", d => c.err += d);
+  c.p.stdin.on("error", () => {});   // 先に終わっていた場合（結果は close で扱う）
+  return c;
+}
+
+let spare = null;
+// 次の1枚のぶんを先に起動しておく（サーバーから呼ぶ）。古くなったものは 20分で起動し直す
+function warm(model) {
+  if (spare) { clearTimeout(spare.timer); spare.p.kill(); }
+  spare = start(model);
+  spare.timer = setTimeout(() => warm(model), 20 * 60000);
+  spare.timer.unref();
+}
+function take(model) {
+  const c = spare;
+  if (c) { clearTimeout(c.timer); spare = null; warm(model); }
+  if (c && !c.done && c.model === model) return c;
+  if (c) c.p.kill();
+  return start(model);
+}
+
+// buf: JPEG の中身。戻り値 { text, ms, outTok }
 function readImage(buf, model, timeoutMs) {
+  const c = take(model);
   return new Promise((resolve, reject) => {
     const msg = { type: "user", message: { role: "user", content: [
       { type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } },
       { type: "text", text: prompt() }] } };
-    const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-      "--no-session-persistence", "--tools", "", "--system-prompt", "あなたは手書きカルテの処方を正確に書き起こす薬剤師の助手です。"];
-    if (model) args.push("--model", model);
-    // 有料の API キーが設定されていても使わない（サブスクリプションで動かす）
-    const env = Object.assign({}, process.env);
-    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
     const t0 = Date.now();
-    const p = spawn(claudeExe(), args, { env, cwd: __dirname, windowsHide: true });
-    let out = "", err = "";
-    const timer = setTimeout(() => { p.kill(); reject(new Error("時間がかかりすぎたので中止しました")); }, timeoutMs || 180000);
-    p.stdout.on("data", d => out += d); p.stderr.on("data", d => err += d);
-    p.on("error", e => { clearTimeout(timer); reject(e); });
-    p.on("close", code => {
+    const timer = setTimeout(() => { c.p.kill(); reject(new Error("時間がかかりすぎたので中止しました")); }, timeoutMs || 180000);
+    c.closed.then(() => {
       clearTimeout(timer);
-      const ev = out.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+      if (c.done.error) return reject(c.done.error);
+      const ev = c.out.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
       const res = ev.find(e => e.type === "result");
-      if (!res || res.is_error) return reject(new Error(res ? String(res.result || "読み取りに失敗しました").slice(0, 200) : `Claude を起動できませんでした（${code}）${err.slice(0, 200)}`));
-      resolve({ text: String(res.result || "").trim(), ms: Date.now() - t0 });
+      if (!res || res.is_error) return reject(new Error(res ? String(res.result || "読み取りに失敗しました").slice(0, 200) : `Claude を起動できませんでした（${c.done.code}）${c.err.slice(0, 200)}`));
+      resolve({ text: String(res.result || "").trim(), ms: Date.now() - t0, outTok: res.usage && res.usage.output_tokens });
     });
-    p.stdin.write(JSON.stringify(msg) + "\n"); p.stdin.end();
+    c.p.stdin.write(JSON.stringify(msg) + "\n"); c.p.stdin.end();
   });
 }
-module.exports = { readImage, prompt, claudeExe };
+module.exports = { readImage, warm, prompt, claudeExe, EFFORT };
