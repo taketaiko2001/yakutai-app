@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-28c";
+const APP_VERSION = "2026-09-29a";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -363,7 +363,7 @@ function bagCard(b, i) {
     h += `<div class="f"><span class="lbl">時点</span>${chipGroup(i, "timing", TIMINGS, b.timing, true, b.uncertain.includes("timing"))} ${inp(b, "interval")}時間毎</div>`;
     h += `<div class="f"><span class="lbl">食事</span>${chipGroup(i, "meal", [...MEALS, "なし"], b.meal, false, b.uncertain.includes("meal"))}</div>`;
     h += `<div class="f"><label class="chip"><input type="checkbox" data-key="tonpuku" ${b.tonpuku ? "checked" : ""}><span>とんぷく</span></label></div>`;
-    if (b.tonpuku) h += `<div class="f"><span class="lbl"></span>1回${inp(b, "tonpuku_amount")}個(包) ${inp(b, "tonpuku_count")}回分 ${chipGroup(i, "tonpuku_when", TONPUKU_WHEN, b.tonpuku_when, true, b.uncertain.includes("tonpuku_when"))}</div>`;
+    if (b.tonpuku) h += `<div class="f"><span class="lbl"></span>1回${inp(b, "tonpuku_amount")}個(包) ${inp(b, "tonpuku_count")}回分 ${chipGroup(i, "tonpuku_when", TONPUKU_WHEN, b.tonpuku_when, true, b.uncertain.includes("tonpuku_when"))} ${inp(b, "tonpuku_note", "wide-in", "ほかの時（例: 手わるい時）")}</div>`;
   } else {
     h += `<div class="f">1日${inp(b, "times")}回 <span class="lbl" style="width:auto">部位</span>${inp(b, "site", "wide-in", "例: 顔保湿")}</div>`;
     h += `<div class="f"><span class="lbl">種類</span>${chipGroup(i, "kind", KINDS, b.kind, false, b.uncertain.includes("kind"))}</div>`;
@@ -724,7 +724,7 @@ function savePrintSettings() {
 }
 const TEST_BAGS = {
   naifuku: { type: "naifuku", times: "3", days: "14", powder: "1", capsule: "1", tablet: "各1", dose_note: "2種類",
-    timing: ["朝", "昼", "夕", "ねる前"], interval: "6", meal: "食後", tonpuku: true, tonpuku_amount: "1", tonpuku_count: "5", tonpuku_when: ["痛い時", "かゆい時"] },
+    timing: ["朝", "昼", "夕", "ねる前"], interval: "6", meal: "食後", tonpuku: true, tonpuku_amount: "1", tonpuku_count: "5", tonpuku_when: ["痛い時", "かゆい時"], tonpuku_note: "手わるい時" },
   gaiyou: { type: "gaiyou", times: "2", site: "足のつめ", kind: "ぬり薬" },
 };
 async function testPrint(type, size, art) {
@@ -794,7 +794,7 @@ function init() {
 }
 function emptyBag(type) {
   return { type, drugs: [], drug_names: [], source: "", times: "", days: "", powder: "", capsule: "", tablet: "", dose_note: "",
-    timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "", tonpuku_when: [], kind: "", site: "",
+    timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "", tonpuku_when: [], tonpuku_note: "", kind: "", site: "",
     zayaku_temp: "", qty: null, unit: "", containers: 0, uncertain: [], comment: "", unknown_drug: "", sizeReason: "" };
 }
 init();

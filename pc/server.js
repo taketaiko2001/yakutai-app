@@ -21,10 +21,12 @@ function isLocal(ip) {
 }
 
 let queue = Promise.resolve();   // 1枚ずつ順に読む
+// まれに考えすぎて1分以上かかることがあるので、この秒数たっても終わらなければ、もう1つ同じ読み取りを始めて早いほうを使う
+const HEDGE_MS = 20000;
 // 一時的に失敗することがあるので、1回だけ読み直す
 function readQueued(buf, own) {
   const ex = loadExamples();   // 見本は読むたびに読み込む（入れ替えても再起動いらず）
-  const p = queue.then(() => readImage(buf, MODEL, 0, ex, own).catch(() => readImage(buf, MODEL, 0, ex, own)));
+  const p = queue.then(() => readImage(buf, MODEL, 0, ex, own, HEDGE_MS).catch(() => readImage(buf, MODEL, 0, ex, own, HEDGE_MS)));
   queue = p.catch(() => {}); return p;
 }
 
@@ -50,7 +52,7 @@ const server = http.createServer((req, res) => {
       const t = new Date().toLocaleTimeString("ja-JP");
       try {
         const r = await readQueued(buf, own);
-        console.log(`${t} 読み取り ${(r.ms / 1000).toFixed(1)}秒（出力 ${r.outTok} トークン）`);
+        console.log(`${t} 読み取り ${(r.ms / 1000).toFixed(1)}秒（出力 ${r.outTok} トークン${r.hedged ? "・時間がかかったので2つ目で読み直し" : ""}）`);
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ text: r.text, ms: r.ms, model: MODEL }));
       } catch (e) {

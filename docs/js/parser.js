@@ -126,13 +126,15 @@
   const RE_TONPUKU = /頓|トンプク|prn|屯/;
   const RE_COUNT = /(\d+)\s*回分|[×x]\s*(\d+)\s*回(?!\/)/;
   const RE_TIMES_1DAY = /1日\s*(\d)\s*回/;
-  // 外用の回数:「夜1」「1日数回」「日2」「1日2回」
-  const RE_TIMES_ANY = /夜\s*1|1日\s*数\s*回?|数回|(?<!\d)1日\s*\d\s*回?(?!\d)|(?<![\d.])日\s*\d(?!\d)/g;
+  // 外用の回数:「夜1」「昼1」「1日数回」「日2」「1日2回」。「(アタマ 昼)」のように時間帯だけのときも、その時間に1回
+  const RE_TIMES_ANY = /[朝昼夕夜]\s*1(?!\d)|[朝昼夕夜](?=\s*回?\s*(?:[)）]|$))|1日\s*数\s*回?|数回|(?<!\d)1日\s*\d\s*回?(?!\d)|(?<![\d.])日\s*\d(?!\d)/g;
+  const RE_TIMES_AT = /^[朝昼夕夜]1$/;   // 時間帯つきの1回（夜1・昼1 など）
   function timesToken(t) {
     const m = t.match(RE_TIMES_ANY);
     if (!m) return "";
     const x = m[m.length - 1];
-    if (/夜/.test(x)) return "夜1";
+    const at = x.match(/[朝昼夕夜]/);
+    if (at) return at[0] + "1";
     if (/数/.test(x)) return "数";
     return x.match(/(\d)(?!.*\d)/)[1];
   }
@@ -141,8 +143,8 @@
   const RE_CONTAINERS = /(\d+(?:\.\d+)?)\s*(?:g|本)?\s*[×x]\s*(\d+)(?!\s*(?:回|日|td))/;  // 混合容器「3×2」= 3番の容器を2個
   const RE_PAREN = /[(（]\s*([^)）]*)[)）]?/;
   const RE_RP = /^\s*[^\s(（]{1,3}\)\s*/;   // 「Rp)」とそのOCR読み違い
-  // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)、ベZ（混合軟膏））。部位ではないので読み飛ばす
-  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|乳剤?性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ|混合軟膏)\s*[)）]?/g;
+  // 製品の区別の注記（例: ヘパcn(油)、ヘパcn(NP)、ヘパcr(ニプロ)、ベZ（混合軟膏））。部位ではないので読み飛ばす
+  const RE_MAKER_NOTE = /[(（]\s*(?:油性?|乳剤?性?|NP|np|ＮＰ|ニプロ|ﾆﾌﾟﾛ|ジェネリック|後発品?|GE|ge|混合軟膏)\s*[)）]?/g;
   // チューブの大きさ（例: ヘパcr(25)＝25gのチューブ）と年齢（例: (12才)）。部位ではないので読み飛ばす
   const RE_TUBE_NOTE = /[(（]\s*(?:5|10|15|20|25|30|50|100)\s*g?\s*[)）]/g;
   const RE_AGE_NOTE = /[(（]\s*\d{1,3}\s*[才歳][)）]?/g;
@@ -153,7 +155,9 @@
 
   function qtyMatches(t) { return [...t.matchAll(RE_QTY_G)]; }
 
-  function parseUsage(t) {
+  // 頓服の「手わるい時」など、薬袋に印刷された選択肢（痛い時・発熱時・かゆい時）にない使うときの指示
+  const RE_TONPUKU_NOTE = /([^\s\d()（）×x/・,、。]{1,10}?(?:時|とき))/g;
+  function parseUsage(t, orig) {
     const u = {};
     t = t.replace(/(\d)o(?=\d|\s*td)/g, "$10");   // 「6OTD」→「60TD」（数字のゼロを英字のOと読み違えたもの）
     let m = t.match(RE_USAGE);
@@ -191,6 +195,11 @@
     if (t.includes("熱")) when.push("発熱時");
     if (t.includes("痒") || t.includes("カユ")) when.push("かゆい時");
     if (when.length) u.when = when;
+    if (u.tonpuku && orig) {
+      const other = [...String(orig).matchAll(RE_TONPUKU_NOTE)].map(x => x[1].replace(/^(?:頓[用服]?|トンプク|とんぷく|屯)/, ""))
+        .filter(w => w.length >= 2 && !/痛|熱|かゆ|カユ|痒/.test(w));
+      if (other.length) u.note = other.join("・");
+    }
     return u;
   }
 
@@ -211,14 +220,14 @@
       parts.push(`${n}×${code}`);
     }
     if (u.days) parts.push(`${u.days}TD`);
-    if (u.tonpuku) { parts.push("頓用"); if (u.count) parts.push(`${u.count}回分`); parts.push(...(u.when || [])); }
+    if (u.tonpuku) { parts.push("頓用"); if (u.count) parts.push(`${u.count}回分`); parts.push(...(u.when || [])); if (u.note) parts.push(u.note); }
     return parts.join(" ") || "（用法）";
   }
 
   function emptyBag(type) {
     return { type, drugs: [], drug_names: [], source: "", times: "", days: "", powder: "", capsule: "", tablet: "",
       dose_note: "", timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "",
-      tonpuku_when: [], kind: "", site: "", zayaku_temp: "", qty: null, unit: "", containers: 0,
+      tonpuku_when: [], tonpuku_note: "", kind: "", site: "", zayaku_temp: "", qty: null, unit: "", containers: 0,
       uncertain: [], comment: "", unknown_drug: "", siteFlag: "", siteNote: "" };
   }
 
@@ -278,7 +287,7 @@
 
       const body = t.replace(RE_RP, "").replace(RE_BULLET, "");
       const qms = qtyMatches(body);
-      const usage = parseUsage(body);
+      const usage = parseUsage(body, line);
       let namePart = qms.length ? body.slice(0, qms[0].index) : body;
       const um = namePart.match(RE_USAGE);
       if (um) namePart = namePart.slice(0, um.index);
@@ -454,6 +463,7 @@
       bag.tonpuku = true;
       bag.tonpuku_count = usage.count || "";
       bag.tonpuku_when = usage.when || [];
+      bag.tonpuku_note = usage.note || "";
       bag.tonpuku_amount = items[0].qty != null ? fmtNum(items[0].qty) : "";
       if (!bag.tonpuku_count) unsure.add("tonpuku_count");
     } else {
@@ -553,7 +563,7 @@
     if (isDitto(siteText)) { bag._ditto = true; siteText = ""; }
     if (siteText) {
       // 一覧にない部位は、カルテの書き方（ひらがな・漢字）のまま印字する
-      const om = pm && String(line || "").match(RE_PAREN);
+      const om = pm && String(line || "").replace(RE_MAKER_NOTE, " ").replace(RE_TUBE_NOTE, " ").replace(RE_AGE_NOTE, " ").match(RE_PAREN);
       const orig = om ? om[1].replace(RE_TIMES_ANY, "").replace(/^[\s　・]+|[\s　・]+$/g, "") : "";
       setSite(bag, siteText, sites, orig);
       if (bag.uncertain.includes("site")) { uns.add("site"); bag.uncertain = []; }
@@ -583,12 +593,12 @@
     site = String(site || "");
     if (!site) return null;
     const fixed = String(drug.times || "");
-    if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && !(RE_BIGTOE.test(site) && !/手/.test(site)) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "手に塗る薬 → 1日数回" };
-    if (RE_MOUTH.test(site) && !RE_NOT_MOUTH.test(site) && fixed !== "1" && fixed !== "夜1") return { times: "数", why: "口に塗る薬 → 1日数回" };
+    if (RE_HAND.test(site) && !RE_NOT_HAND.test(site) && !(RE_BIGTOE.test(site) && !/手/.test(site)) && fixed !== "1" && !RE_TIMES_AT.test(fixed)) return { times: "数", why: "手に塗る薬 → 1日数回" };
+    if (RE_MOUTH.test(site) && !RE_NOT_MOUTH.test(site) && fixed !== "1" && !RE_TIMES_AT.test(fixed)) return { times: "数", why: "口に塗る薬 → 1日数回" };
     return null;
   }
   function isDitto(s) { return /^\s*[〃々"″]+\s*$/.test(String(s || "")) || /^\s*同上\s*$/.test(String(s || "")); }
-  function timesLabel(tk) { return tk === "夜1" ? "夜1" : tk === "数" ? "1日数回" : `1日${tk}回`; }
+  function timesLabel(tk) { return RE_TIMES_AT.test(tk) ? tk : tk === "数" ? "1日数回" : `1日${tk}回`; }
   // 同じ部位（〃）の薬を1つの袋にまとめる
   function mergeInto(a, b) {
     if (!a || !b || a.type !== "gaiyou" || b.type !== "gaiyou") return false;
@@ -662,7 +672,7 @@
   function bagToText(b, defaultTimes) {
     if (b.type === "naifuku") {
       const lines = (b.drugs || []).slice();
-      lines.push(usageText({ times: b.times, timing: b.timing, meal: b.meal, days: b.days, tonpuku: b.tonpuku, count: b.tonpuku_count, when: b.tonpuku_when }));
+      lines.push(usageText({ times: b.times, timing: b.timing, meal: b.meal, days: b.days, tonpuku: b.tonpuku, count: b.tonpuku_count, when: b.tonpuku_when, note: b.tonpuku_note }));
       return lines.join("\n");
     }
     return (b.drugs || []).map((name, i) => {

@@ -47,9 +47,11 @@ function prompt(own) {
 〈混合軟膏の略名〉 -〈容器の番号〉×〈個数〉 (〈部位〉)
 〈薬の正式名〉 〈1日量〉T 〈用法〉 〈日数〉TD
 〈セット名〉 〈用法〉 〈日数〉TD
+〈薬の正式名〉 〈1回量〉T 頓用 〈使うとき〉 〈回数〉回分
 
 ルール:
 - 薬の名前は、その行の先頭に書かれた薬の略記を1文字ずつ読んで決め、下の「薬の一覧」の正式名にそろえる（カルテは略記: ヘパlo、GMo、クリーゲル、ダーTlo、クロ(P)lo など。一覧の（）の中が略記）。数量や部位から薬を推測しない。一覧にない薬はカルテの書き方のまま。
+- 薬の名前の後ろの (NP)・(ニプロ)・(乳)・(油) などは製品の区別なので書かない。
 - 外用の数量は「2本」「50g×3」。混合軟膏（サヘパ・ベタヘパ・ロヘパ・クロヘパ・サZ・ベZ・ロZ・クロZ）は「サヘパ -3」「ベタヘパ -2×2」のように書く（-数字は容器の番号、×は個数）。
 - 用法（2×N・1×タ など）と日数（14TD など）が書いてある行は、のみ薬（錠剤・カプセル）。1日量は 2T・1C のように書く。
 - 部位は括弧の中に、カタカナ・ひらがな・漢字をまぜて書いてある（アタマ、カオ、カラダ、ウデ、クビ、からだ、うで、カオホシツ など）。部位は、ほとんどが下の「部位の一覧」のどれか（一覧にない新しい部位は数％だけ）。次の順で決める。
@@ -58,11 +60,12 @@ function prompt(own) {
   3. 読めない字を推測で補ったときは、部位の後ろに ? を付ける（例: (〈部位〉?)）。はっきり読めたときは付けない。
   4. 一覧のどれとも合わない言葉や、一覧の言葉に別の言葉が付け足されているとき（左右・場所・症状などが付いたもの）は、新しい部位なので、一覧の言葉に置き換えず読んだとおりに書く。
   括弧のすぐ後ろに続けて書いた言葉も部位に含める（(〈部位〉) 〈言葉〉 → (〈部位〉〈言葉〉)）。上と同じの「〃」はそのまま (〃)。部位が書いていなければ括弧ごと省く。
-- 回数の指示（1日1→日1、1日2→日2、夜1、1日数回→日数）が書いてあれば最後に付ける。書いていなければ付けない。
+- 回数の指示（1日1→日1、1日2→日2、夜1・昼1・朝1（「夜」「昼」だけのときも 夜1・昼1）、1日数回→日数）が書いてあれば最後に付ける。書いていなければ付けない。
+- 「頓」（頓用・頓服）と書いてある内服は、1回量・頓用・使うとき（手わるい時・かゆい時 など、書いてあるとおり）・回数（30回分 など）を1行に書く。
 - 内服は「1日量 用法 日数」（2T 2×N 14TD、1T 1×タ 28TD、1C 1×朝 14TD など）。
 - 内服の薬をいくつか括弧や線でまとめて、用法と日数を1つだけ書いてあるときは（同じ袋に入れる）、薬を1行ずつ1日量まで書き、その下に用法と日数を1行で書く（〈薬A〉 3T ／ 〈薬B〉 3T ／ 3×N 28TD の3行）。
 - 「しみ3つ」などのセット名は「しみ3つ 3×N 60TD」のように書く。
-- 「(S)」や「処置」の欄（B-1 など）は処置なので出力しない。検査の結果（KOH(−) など）や説明の文も出力しない。線で消された行も出力しない。日付・医師の印は出力しない。日付が写っていたら、いちばん下の日付より下の処方だけを出力する（上は前回の処方）。
+- 「(S)」や「処置」「処)」の欄（B-1・LN2 など）は処置なので出力しない。検査の結果（KOH(−) など）や説明の文も出力しない。線で消された行も出力しない。日付・医師の印は出力しない。日付が写っていたら、いちばん下の日付より下の処方だけを出力する（上は前回の処方）。
 - 読めない字も、一覧と皮膚科の処方として最もありそうなものを推測して必ず埋める。
 
 部位の一覧: ${v.sites.join("、")}
@@ -127,23 +130,10 @@ function loadExamples(dir) {
 
 const jpeg = buf => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: buf.toString("base64") } });
 
-// buf: JPEG の中身。examples: このクリニックのカルテの見本 [{ buf, text }]（字のくせを覚えさせる）。
-// own: スマホの薬・部位の一覧 { drugs, sites }（なければ初期データ）。戻り値 { text, ms, outTok }
-function readImage(buf, model, timeoutMs, examples, own) {
-  const c = take(model);
+// 1つの Claude に1枚読ませて、結果の文を取り出す
+function once(c, msg) {
   return new Promise((resolve, reject) => {
-    const content = [];
-    if (examples && examples.length) {
-      content.push({ type: "text", text: `まず、このクリニックの医師の字のくせを覚えてください。次の${examples.length}枚は、同じクリニックのカルテの処方欄と、その正しい読み取りです（同じ言葉は同じように崩して書かれます）。` });
-      examples.forEach((e, i) => { content.push(jpeg(e.buf), { type: "text", text: `見本${i + 1}の正しい読み取り:\n${e.text}` }); });
-      content.push({ type: "text", text: "ここからが読み取る画像です。見本の字のくせを参考に読んでください。" });
-    }
-    content.push(jpeg(buf), { type: "text", text: prompt(own) });
-    const msg = { type: "user", message: { role: "user", content } };
-    const t0 = Date.now();
-    const timer = setTimeout(() => { c.p.kill(); reject(new Error("時間がかかりすぎたので中止しました")); }, timeoutMs || 180000);
     c.closed.then(() => {
-      clearTimeout(timer);
       if (c.done.error) return reject(c.done.error);
       const ev = c.out.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
       const res = ev.find(e => e.type === "result");
@@ -151,9 +141,43 @@ function readImage(buf, model, timeoutMs, examples, own) {
       let text = String(res.result || "");
       const k = text.lastIndexOf("【処方】");
       if (k >= 0) text = text.slice(k + 4);
-      resolve({ text: text.trim(), ms: Date.now() - t0, outTok: res.usage && res.usage.output_tokens });
+      resolve({ text: text.trim(), outTok: res.usage && res.usage.output_tokens });
     });
-    c.p.stdin.write(JSON.stringify(msg) + "\n"); c.p.stdin.end();
+    c.p.stdin.write(msg); c.p.stdin.end();
+  });
+}
+
+// buf: JPEG の中身。examples: このクリニックのカルテの見本 [{ buf, text }]（字のくせを覚えさせる）。
+// own: スマホの薬・部位の一覧 { drugs, sites }（なければ初期データ）。戻り値 { text, ms, outTok, hedged }
+// hedgeMs: この時間たっても終わらないときは、もう1つ同じ読み取りを始めて、先に終わったほうを使う
+//          （まれに考えすぎて1分以上かかることがあるため。ふだんは1回分しか使わない）
+function readImage(buf, model, timeoutMs, examples, own, hedgeMs) {
+  const content = [];
+  if (examples && examples.length) {
+    content.push({ type: "text", text: `まず、このクリニックの医師の字のくせを覚えてください。次の${examples.length}枚は、同じクリニックのカルテの処方欄と、その正しい読み取りです（同じ言葉は同じように崩して書かれます）。` });
+    examples.forEach((e, i) => { content.push(jpeg(e.buf), { type: "text", text: `見本${i + 1}の正しい読み取り:\n${e.text}` }); });
+    content.push({ type: "text", text: "ここからが読み取る画像です。見本の字のくせを参考に読んでください。" });
+  }
+  content.push(jpeg(buf), { type: "text", text: prompt(own) });
+  const msg = JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n";
+  const t0 = Date.now(), kids = [];
+  return new Promise((resolve, reject) => {
+    let finished = false, running = 0, hedge = null;
+    const end = () => { finished = true; clearTimeout(timer); clearTimeout(hedge); for (const c of kids) if (!c.done) c.p.kill(); };
+    const go = () => {
+      const c = take(model); kids.push(c); running++;
+      once(c, msg).then(r => {
+        if (finished) return;
+        end(); resolve(Object.assign(r, { ms: Date.now() - t0, hedged: kids.length > 1 }));
+      }, e => {
+        running--;
+        if (finished || running > 0) return;   // もう1つがまだ読んでいるときはそちらを待つ
+        end(); reject(e);
+      });
+    };
+    const timer = setTimeout(() => { if (!finished) { end(); reject(new Error("時間がかかりすぎたので中止しました")); } }, timeoutMs || 180000);
+    go();
+    if (hedgeMs) hedge = setTimeout(() => { if (!finished) go(); }, hedgeMs);
   });
 }
 module.exports = { readImage, warm, prompt, claudeExe, loadExamples, EFFORT };

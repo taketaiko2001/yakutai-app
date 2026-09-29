@@ -183,6 +183,7 @@
         T("tonpuku_amount", bag.tonpuku_amount);
         T("tonpuku_count", bag.tonpuku_count);
         (bag.tonpuku_when || []).forEach(O);
+        T("tonpuku_note", bag.tonpuku_note);   // 「手わるい時」など、選択肢にない使うとき（とんぷく欄の右に書く）
       }
     } else {
       T("site", bag.site);
