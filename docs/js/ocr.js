@@ -60,6 +60,9 @@
     return cv;
   }
 
+  // 使い終わったキャンバスの画素をすぐ手放す（iPhone の Safari はキャンバスのメモリをなかなか返さず、たまるとページが落ちる）
+  function free(cv) { if (cv) cv.width = cv.height = 0; }
+
   // RGBA → BGR の CHW 配列（(x/255 - 0.5)/0.5）
   function toTensor(data, w, h) {
     const out = new Float32Array(3 * w * h), plane = w * h;
@@ -82,6 +85,7 @@
     const ctx = cv.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(src, 0, 0, W, H);
     const px = ctx.getImageData(0, 0, W, H).data;
+    free(cv);
     const input = new global.ort.Tensor("float32", toTensor(px, W, H), [1, 3, H, W]);
     const outMap = await det.run({ [det.inputNames[0]]: input });
     const prob = outMap[det.outputNames[0]].data;
@@ -170,6 +174,7 @@
     ctx.fillStyle = "rgb(128,128,128)"; ctx.fillRect(0, 0, W, ch);
     ctx.drawImage(img, 0, 0, rw, ch);
     const t = toTensor(ctx.getImageData(0, 0, W, ch).data, W, ch);
+    free(cv);
     for (let c = 0; c < 3; c++) for (let y = 0; y < ch; y++) for (let x = rw; x < W; x++) t[c * W * ch + y * W + x] = 0;
     return { t, W, ch };
   }
@@ -182,6 +187,7 @@
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, 0, 0, W, H);
     const d = ctx.getImageData(0, 0, W, H).data, plane = W * H, out = new Float32Array(3 * plane);
+    free(cv);
     for (let i = 0, p = 0; p < plane; p++, i += 4) {
       out[p] = d[i] / 127.5 - 1; out[plane + p] = d[i + 1] / 127.5 - 1; out[2 * plane + p] = d[i + 2] / 127.5 - 1;
     }
@@ -263,6 +269,7 @@
       const A = await runRec(recA, dictA, kA.cols, kA.chars, x);
       const J = await runRec(recJ, dictJ, kJ.cols, kJ.chars, x);
       const B = await runNdl(img, kN.cols, kN.chars);
+      free(img);
       if (!A.seq.length && !J.seq.length && !B.seq.length) continue;
       items.push({ x: b.cx - b.w / 2, x2: b.cx + b.w / 2, top: b.cy - b.h / 2, bottom: b.cy + b.h / 2, A, J, B });
     }
@@ -313,7 +320,13 @@
     const src = toCanvas(img, 2400, 1440, rect);
     onProgress && onProgress("処方の部分を探しています…");
     const boxes = (await detect(src)).sort((a, b) => a.cy - b.cy);
-    const readA = async b => { const c = cropUpright(src, b); return c ? (await runRec(recA, dictA, [], [], recTensor(c))).seq.map(x => x.ch).join("").normalize("NFKC") : ""; };
+    const readA = async b => {
+      const c = cropUpright(src, b);
+      if (!c) return "";
+      const x = recTensor(c);
+      free(c);
+      return (await runRec(recA, dictA, [], [], x)).seq.map(x => x.ch).join("").normalize("NFKC");
+    };
     // 日付の行を探す。今日から2か月以内の日付のうち、いちばん下のもの（今日の記載）を使う。
     // 古い日付・生年月日のような日付は使わない（その下に名前や住所があるかもしれないので）
     today = today || new Date();
@@ -339,17 +352,19 @@
         if (recent(ago)) { date = b; dateText = t; if (dbg) dbg.push(`つなげて ${t}  ← ${ago}日前`); }
       }
     }
-    if (!date) return { image: null, dateText: "" };
+    if (!date) { free(src); return { image: null, dateText: "" }; }
     // 日付と同じ行にある印（イ・K など）もつなげる（医師の判定用。送る画像には入れない）
     const sameRow = b => b !== date && Math.min(b.y2, date.y2) - Math.max(b.y, date.y) > 0.4 * Math.min(b.y2 - b.y, date.y2 - date.y);
     for (const b of boxes.filter(sameRow).filter(b => b.x >= date.x).sort((a, b) => a.x - b.x)) dateText += " " + await readA(b);
     // 日付の枠が「初診料」などとつながって長いときは、日付の幅を文字の高さから見積もる
     const left = date.x - 1.5 * Math.min(date.x2 - date.x, 5 * (date.y2 - date.y));
     const keep = boxes.filter(b => b !== date && !sameRow(b) && b.cy > date.y2 && b.cx >= left);
-    if (!keep.length) return { image: null, dateText };
+    if (!keep.length) { free(src); return { image: null, dateText }; }
     const pad = b => 0.25 * (b.y2 - b.y);
     const X0 = Math.max(0, Math.min(...keep.map(b => b.x - pad(b)))), Y0 = Math.max(0, Math.min(...keep.map(b => b.y - pad(b))));
     const X1 = Math.min(src.width, Math.max(...keep.map(b => b.x2 + pad(b)))), Y1 = Math.min(src.height, Math.max(...keep.map(b => b.y2 + pad(b))));
+    if (dbg) dbg.push(`CROP ${Math.round(X0)},${Math.round(Y0)},${Math.round(X1)},${Math.round(Y1)} keep=${keep.length}`);
+    if (dbg) dbg.push("KEEP " + JSON.stringify(keep.map(b => [b.x, b.y, b.x2, b.y2, pad(b)].map(Math.round))));
     // 長辺1600まで（読むのに十分で、送る量を減らす）
     const s = Math.min(1, 1600 / Math.max(X1 - X0, Y1 - Y0));
     const cv = document.createElement("canvas");
@@ -361,6 +376,7 @@
       const p = pad(b), x = Math.max(0, b.x - p), y = Math.max(0, b.y - p), w = Math.min(src.width, b.x2 + p) - x, h = Math.min(src.height, b.y2 + p) - y;
       ctx.drawImage(src, x, y, w, h, (x - X0) * s, (y - Y0) * s, w * s, h * s);
     }
+    free(src);
     return { image: cv, dateText };
   }
 

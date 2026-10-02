@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-09-29b";
+const APP_VERSION = "2026-10-02a";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -20,7 +20,20 @@ const S = {
 // ---------------------------------------------------------------- 共通
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function toHalf(s) { return String(s == null ? "" : s).normalize("NFKC").trim(); }
-function busy(on, text) { $("#busy").hidden = !on; if (text) $("#busyText").textContent = text; }
+function busy(on, text) {
+  $("#busy").hidden = !on; if (text) $("#busyText").textContent = text;
+  // 処理中の段階を残しておく。処理の途中でページが落ちたら、次に開いたときにどこで止まったかを表示する（原因を調べるため）
+  try { if (on) localStorage.setItem("yakutai_busy", JSON.stringify({ text: text || $("#busyText").textContent, t: Date.now() })); else localStorage.removeItem("yakutai_busy"); } catch (e) {}
+}
+// 前回、処理の途中でページが落ちていたら知らせる
+function reportLastCrash() {
+  let b = null;
+  try { b = JSON.parse(localStorage.getItem("yakutai_busy") || "null"); localStorage.removeItem("yakutai_busy"); } catch (e) {}
+  if (!b || !b.text || Date.now() - b.t > 864e5) return;
+  const st = $("#ocrStatus"), at = new Date(b.t);
+  st.hidden = false; st.className = "status warn";
+  st.textContent = `⚠ 前回（${at.getHours()}:${String(at.getMinutes()).padStart(2, "0")}）、「${b.text}」の途中でアプリが止まりました（スマホのメモリ不足などが考えられます）。続けて起きるときは、この文を控えて知らせてください。`;
+}
 function today() { const d = new Date(); return { year: String(d.getFullYear() - 2018), month: String(d.getMonth() + 1), day: String(d.getDate()) }; }
 function ctx(allowUnknown) {
   const d = Store.data;
@@ -88,18 +101,51 @@ function toast(html, buttons, ms) {
 }
 
 // ---------------------------------------------------------------- ① 写真と読み取り
+// 読み取りに使う写真の最大の大きさ（長辺）。文字認識もこの大きさまでしか使わないので、
+// これより大きい写真は取り込んだときに縮めて持つ（元の大きさのままだとスマホのメモリを使いすぎて、ページが落ちることがある）
+const PHOTO_MAX = 2400;
+// 写真を向きを直して取り込み、長辺 PHOTO_MAX までに縮める。戻り値 { photo: 読み取り用, shown: 画面に出す画像 }
+async function loadPhoto(file) {
+  let src;
+  try {
+    src = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch (e) {
+    src = new Image();
+    src.src = URL.createObjectURL(file);
+    await src.decode();
+  }
+  const s = Math.min(1, PHOTO_MAX / Math.max(src.width, src.height));
+  if (s >= 1) return { photo: src, shown: file };
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(src.width * s); cv.height = Math.round(src.height * s);
+  const c = cv.getContext("2d");
+  c.imageSmoothingQuality = "high";
+  c.drawImage(src, 0, 0, cv.width, cv.height);
+  if (src.close) src.close(); else URL.revokeObjectURL(src.src);   // 元の大きさの写真はすぐ手放す
+  const shown = (await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92))) || file;
+  const bmp = await createImageBitmap(cv).catch(() => null);
+  if (!bmp) return { photo: cv, shown };
+  cv.width = cv.height = 0;
+  return { photo: bmp, shown };
+}
 async function setPhoto(fileOrBlob) {
   if (!fileOrBlob) return;
-  try {
-    S.photo = await createImageBitmap(fileOrBlob, { imageOrientation: "from-image" });
-  } catch (e) {
-    const img = new Image();
-    img.src = URL.createObjectURL(fileOrBlob);
-    await img.decode();
-    S.photo = img;
+  busy(true, "写真を取り込んでいます…");
+  let got;
+  try { got = await loadPhoto(fileOrBlob); }
+  catch (e) {
+    busy(false);
+    const st = $("#ocrStatus");
+    st.hidden = false; st.className = "status warn";
+    st.textContent = "写真を開けませんでした。もう一度撮ってください（" + e.message + "）";
+    return;
   }
+  if (S.photo && S.photo.close) S.photo.close();   // 前の写真のメモリをすぐ手放す
+  S.photo = got.photo;
+  const shown = got.shown;
+  busy(false);
   if (S.photoUrl) URL.revokeObjectURL(S.photoUrl);
-  S.photoUrl = URL.createObjectURL(fileOrBlob);
+  S.photoUrl = URL.createObjectURL(shown);
   $("#photo").src = S.photoUrl;
   S.rect = null; $("#photoSel").hidden = true; endSelect();
   S.pdfs = []; S.doctor = ""; renderPdfResult();
@@ -107,8 +153,10 @@ async function setPhoto(fileOrBlob) {
   $("#photoBox").hidden = false;
   await readPhoto();
 }
-async function readPhoto() {
+// local === true: PC で読めなかったときに、スマホの中で読む（「スマホの中で読む」ボタンから）
+async function readPhoto(local) {
   if (!S.photo) return;
+  local = local === true;
   const st = $("#ocrStatus");
   busy(true, "読み取りの準備中…");
   try {
@@ -118,8 +166,8 @@ async function readPhoto() {
     $("#sentBox").hidden = true;
     // PC から開いているときは、処方の部分だけを PC の Claude に読ませる（読めなければスマホの中で読み、理由を表示する）
     let why = "";
-    if (location.protocol === "http:" && !S.pc) await checkPC();   // PC の再起動などで一度つながらなくても、読むたびに確かめ直す
-    if (S.pc) {
+    if (location.protocol === "http:" && !S.pc && !local) await checkPC();   // PC の再起動などで一度つながらなくても、読むたびに確かめ直す
+    if (S.pc && !local) {
       const r = await readViaPC().catch(e => { why = `PCで読めなかったので（${e.message}）`; return null; });
       if (!r && !why) why = "カルテの日付が見つからなかったので（名前を送らないため。日付が写るように撮り直してください）";
       if (r) {
@@ -143,7 +191,17 @@ async function readPhoto() {
         }
         return;
       }
-    } else if (location.protocol === "http:") why = "PCにつながらなかったので（PCの黒い画面「薬袋プリント（PCで読む）」が開いているか確かめてください）";
+    } else if (location.protocol === "http:" && !local) why = "PCにつながらなかったので（PCの黒い画面「薬袋プリント（PCで読む）」が開いているか確かめてください）";
+    // PC で読むはずが読めなかったときは、スマホの中では自動で読まない（文字認識のモデルを4つ動かすので数分かかり、
+    // スマホのメモリが足りずにページが落ちることがある。精度も低い）。理由を出して、必要なときだけボタンで読む
+    if (why) {
+      st.hidden = false; st.className = "status warn";
+      st.innerHTML = `⚠ ${esc(why)}、読み取りを止めました。撮り直すか「もう一度読み取る」を押してください。` +
+        `<br><button type="button" class="btn tiny" id="btnLocalRead">スマホの中で読む</button> （PCが使えないとき用。数分かかり、精度も低めです）`;
+      $("#btnLocalRead").onclick = () => readPhoto(true);
+      return;
+    }
+    if (local) why = "PCで読めなかったので";
     const { canvas, items } = await LocalOCR.recognize(S.photo, msg => busy(true, msg), keep, S.rect);
     // 医師の印が読めたらその医師に切り替え、その医師の癖（よく使う薬・部位、読み違いの傾向）で判定する
     S.doctor = detectDoctor(KarteReader.makeRows(items)) || "";
@@ -193,7 +251,9 @@ async function readViaPC() {
   const body = JSON.stringify({ image: url,
     drugs: d.drugs.filter(x => x.adopted || x.common).map(x => ({ name: x.name, aliases: x.aliases || [], adopted: true })),
     sites: d.sites.map(x => ({ label: x.label, aliases: x.aliases || [] })) });
-  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  // PC は180秒で打ち切るので、それより少し長く待っても返事がなければあきらめる（Wi-Fi が切れたときなど）
+  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout ? AbortSignal.timeout(200000) : undefined })
+    .catch(e => { throw new Error(e.name === "TimeoutError" ? "PCから返事がありません" : "PCにつながりません"); });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.text) throw new Error(j.error || "PCから返事がありません");
   const text = j.text.split("\n").map(s => s.replace(/^[-・*\s]+/, "").trim()).filter(Boolean).join("\n");
@@ -202,7 +262,7 @@ async function readViaPC() {
 // PC のサーバーから開いているか（http のときだけ確かめる）
 async function checkPC() {
   if (location.protocol !== "http:") return;
-  try { const r = await fetch("/api/ping", { signal: AbortSignal.timeout(4000) }); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
+  try { const r = await fetch("/api/ping", { signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined }); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
   if (S.pc) toast("PCで読むモードです（処方の部分だけをPCのClaudeで読みます）");
 }
 
@@ -559,6 +619,7 @@ function openPdf(i) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 function clearAll() {
+  if (S.photo && S.photo.close) S.photo.close();
   S.bags = []; S.photo = null; S.ocrInitial = ""; S.pdfs = []; S.readLines = []; S.rect = null;
   renderReadRows();
   S.common = Object.assign({ name: "" }, today());
@@ -788,6 +849,7 @@ function init() {
   bindMenu();
   window.addEventListener("resize", schedulePreview);
 
+  reportLastCrash();
   // 使う前に文字認識を裏で準備しておく
   checkPC().then(() => setTimeout(() => LocalOCR.init(null, S.pc).catch(() => {}), 1500));
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
