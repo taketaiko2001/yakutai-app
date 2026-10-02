@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-10-02a";
+const APP_VERSION = "2026-10-02b";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -166,7 +166,8 @@ async function readPhoto(local) {
     $("#sentBox").hidden = true;
     // PC から開いているときは、処方の部分だけを PC の Claude に読ませる（読めなければスマホの中で読み、理由を表示する）
     let why = "";
-    if (location.protocol === "http:" && !S.pc && !local) await checkPC();   // PC の再起動などで一度つながらなくても、読むたびに確かめ直す
+    // 読むたびに PC が返事をするか確かめる（PC がスリープしていると写真が届かず長く待たされるので、4秒で見切る）
+    if (location.protocol === "http:" && !local) await checkPC();
     if (S.pc && !local) {
       const r = await readViaPC().catch(e => { why = `PCで読めなかったので（${e.message}）`; return null; });
       if (!r && !why) why = "カルテの日付が見つからなかったので（名前を送らないため。日付が写るように撮り直してください）";
@@ -191,7 +192,7 @@ async function readPhoto(local) {
         }
         return;
       }
-    } else if (location.protocol === "http:" && !local) why = "PCにつながらなかったので（PCの黒い画面「薬袋プリント（PCで読む）」が開いているか確かめてください）";
+    } else if (location.protocol === "http:" && !local) why = "PCにつながらなかったので（PCがスリープしていないか、PCの黒い画面「薬袋プリント（PCで読む）」が開いているか確かめてください）";
     // PC で読むはずが読めなかったときは、スマホの中では自動で読まない（文字認識のモデルを4つ動かすので数分かかり、
     // スマホのメモリが足りずにページが落ちることがある。精度も低い）。理由を出して、必要なときだけボタンで読む
     if (why) {
@@ -252,18 +253,21 @@ async function readViaPC() {
     drugs: d.drugs.filter(x => x.adopted || x.common).map(x => ({ name: x.name, aliases: x.aliases || [], adopted: true })),
     sites: d.sites.map(x => ({ label: x.label, aliases: x.aliases || [] })) });
   // PC は180秒で打ち切るので、それより少し長く待っても返事がなければあきらめる（Wi-Fi が切れたときなど）
-  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout ? AbortSignal.timeout(200000) : undefined })
-    .catch(e => { throw new Error(e.name === "TimeoutError" ? "PCから返事がありません" : "PCにつながりません"); });
+  const r = await fetch("/api/read", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: timeoutSignal(200000) })
+    .catch(e => { throw new Error(e.name === "AbortError" || e.name === "TimeoutError" ? "PCから返事がありません" : "PCにつながりません。PCがスリープしていないか確かめてください"); });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.text) throw new Error(j.error || "PCから返事がありません");
   const text = j.text.split("\n").map(s => s.replace(/^[-・*\s]+/, "").trim()).filter(Boolean).join("\n");
   return { text, doctor: detectDoctor([{ ta: dateText, tb: dateText }]) || "" };
 }
 // PC のサーバーから開いているか（http のときだけ確かめる）
+// ms 後に打ち切る fetch 用の signal（古い iPhone には AbortSignal.timeout がないので自前で作る）
+function timeoutSignal(ms) { const ac = new AbortController(); setTimeout(() => ac.abort(), ms); return ac.signal; }
 async function checkPC() {
   if (location.protocol !== "http:") return;
-  try { const r = await fetch("/api/ping", { signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined }); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
-  if (S.pc) toast("PCで読むモードです（処方の部分だけをPCのClaudeで読みます）");
+  const was = S.pc;
+  try { const r = await fetch("/api/ping", { signal: timeoutSignal(4000) }); S.pc = r.ok && !!(await r.json()).ok; } catch (e) { S.pc = false; }
+  if (S.pc && !was) toast("PCで読むモードです（処方の部分だけをPCのClaudeで読みます）");
 }
 
 // 写真の上を指でなぞって、読み取る範囲を囲む

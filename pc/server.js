@@ -3,7 +3,7 @@
 //  ・/api/read  スマホから「処方の部分だけ」の画像（と、スマホの薬・部位の一覧）を受け取り、Claude に読ませて結果を返す
 //    画像はファイルに保存しない。読み取った内容も記録しない（時刻と秒数だけ表示）
 //  ・pc/examples/ に置いた見本（このクリニックのカルテの処方欄と正しい読み取り）を毎回いっしょに渡し、医師の字のくせを覚えさせる
-const http = require("http"), fs = require("fs"), path = require("path"), os = require("os");
+const http = require("http"), fs = require("fs"), path = require("path"), os = require("os"), { spawn } = require("child_process");
 const { readImage, warm, claudeExe, loadExamples, EFFORT } = require("./claude_read.js");
 
 const PORT = +process.env.PORT || 8787;
@@ -18,6 +18,21 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 function isLocal(ip) {
   ip = String(ip || "").replace(/^::ffff:/, "");
   return ip === "127.0.0.1" || ip === "::1" || /^192\.168\./.test(ip) || /^10\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+}
+
+// このPCが放置でスリープすると、スマホから送った写真が届かず、読み取りが止まったように見える。
+// この画面（サーバー）が開いている間だけ、PCがスリープしないようにする（画面の消灯はそのまま。この画面を閉じれば元の設定どおり）。
+// Windows の SetThreadExecutionState（ES_CONTINUOUS | ES_SYSTEM_REQUIRED）を呼んだ PowerShell を裏で動かしておき、
+// サーバーが終わったら（画面を閉じたときも、20秒ごとに確かめて）その PowerShell も終わる
+function keepAwake() {
+  if (process.platform !== "win32") return false;
+  const ps = `Add-Type -Name P -Namespace W -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint e);'
+[void][W.P]::SetThreadExecutionState([uint32]2147483649)
+while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 20 }`;
+  const c = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(ps, "utf16le").toString("base64")], { windowsHide: true, stdio: "ignore" });
+  c.on("error", () => {});
+  process.on("exit", () => { try { c.kill(); } catch (e) { /* もう終わっている */ } });
+  return true;
 }
 
 let queue = Promise.resolve();   // 1枚ずつ順に読む
@@ -84,5 +99,6 @@ server.listen(PORT, "0.0.0.0", () => {
   for (const ip of ips) console.log(`   http://${ip}:${PORT}/`);
   console.log(`読み取り: Claude（${MODEL}・effort ${EFFORT}）  ${claudeExe()}`);
   console.log(`見本: ${loadExamples().length}枚（pc/examples）`);
+  if (keepAwake()) console.log("この画面が開いている間は、PCがスリープしないようにしています（閉じれば元どおり）。");
   warm(MODEL);
 });
