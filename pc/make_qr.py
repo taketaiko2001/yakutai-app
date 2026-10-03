@@ -1,7 +1,7 @@
 # スマホで「PCで読む」ページを開くための QR コードを作る（アプリを更新するたびに作り直す）
 #   python pc/make_qr.py
 # アドレスに版（?v=…）を付けるので、読み込むと必ず新しい画面が開く（開いたままの古いタブに切り替わらない）
-# 保存先: Desktop\AI claude code の先頭（00_…）と、yakutai-app フォルダの先頭（0_…）
+# 保存先: Desktop\AI claude code の先頭のフォルダ「00_薬袋プリント」（PCで読む.bat と一緒に置く）と、yakutai-app フォルダの先頭（0_…）
 import os, re, socket, datetime
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(HERE)
 TOP = os.path.dirname(APP)
+SHORTCUT = os.path.join(TOP, "00_薬袋プリント")   # PCで読む.bat と QR コードをまとめて置くフォルダ
 PORT = 8787
 
 
@@ -54,7 +55,8 @@ def main():
                     ("PCで「PCで読む.bat」を起動しておいてください", font(22))]:
         d.text(((W - d.textlength(text, font=f)) / 2, y), text, font=f, fill="black")
         y += 42
-    for path in (os.path.join(TOP, "00_薬袋プリント_スマホで開くQRコード.png"), os.path.join(APP, "0_スマホで開くQRコード.png")):
+    os.makedirs(SHORTCUT, exist_ok=True)
+    for path in (os.path.join(SHORTCUT, "スマホで開くQRコード.png"), os.path.join(APP, "0_スマホで開くQRコード.png")):
         img.save(path)
         print("保存しました:", path)
     print("アドレス:", url)
