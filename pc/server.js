@@ -22,28 +22,58 @@ function isLocal(ip) {
 
 // このPCが放置でスリープすると、スマホから送った写真が届かず、読み取りが止まったように見える。
 // この画面（サーバー）が開いている間だけ、PCがスリープしないようにする（画面の消灯はそのまま。この画面を閉じれば元の設定どおり）。
+// 市原さんの指示で、アプリを更新しても必ずこの仕組みを残す。
 // Windows の SetThreadExecutionState（ES_CONTINUOUS | ES_SYSTEM_REQUIRED）を呼んだ PowerShell を裏で動かしておき、
-// サーバーが終わったら（画面を閉じたときも、20秒ごとに確かめて）その PowerShell も終わる
+// サーバーが終わったら（画面を閉じたときも、20秒ごとに確かめて）その PowerShell も終わる。
+// 効いたかどうかは PowerShell から返事（OK / NG）をもらって表示し、PowerShell が途中で終わってしまったら立ち上げ直す
+const ES_KEEP = 2147483649;   // ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+let awakeOk = null;           // 最後に確かめた結果（null: まだ / true / false）
 function keepAwake() {
-  if (process.platform !== "win32") return false;
+  if (process.platform !== "win32") return;
   const ps = `Add-Type -Name P -Namespace W -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint e);'
-[void][W.P]::SetThreadExecutionState([uint32]2147483649)
-while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 20 }`;
-  const c = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(ps, "utf16le").toString("base64")], { windowsHide: true, stdio: "ignore" });
-  c.on("error", () => {});
-  process.on("exit", () => { try { c.kill(); } catch (e) { /* もう終わっている */ } });
-  return true;
+if ([W.P]::SetThreadExecutionState([uint32]${ES_KEEP}) -ne 0) { 'OK' } else { 'NG' }
+while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 20; [void][W.P]::SetThreadExecutionState([uint32]${ES_KEEP}) }`;
+  let ending = false;
+  const c = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(ps, "utf16le").toString("base64")], { windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+  const report = ok => {
+    if (ok === awakeOk) return;   // 同じ知らせはくり返さない
+    awakeOk = ok;
+    console.log(ok ? "この画面が開いている間は、PCがスリープしないようにしています（閉じれば元どおり）。"
+      : "⚠ PCのスリープを止める設定ができませんでした。しばらく使わないと、PCがスリープすることがあります（1分ごとにやり直します）。");
+  };
+  c.stdout.on("data", d => report(/OK/.test(String(d))));
+  c.on("error", () => report(false));
+  const stop = () => { ending = true; try { c.kill(); } catch (e) { /* もう終わっている */ } };
+  process.on("exit", stop);
+  c.on("exit", () => {
+    process.removeListener("exit", stop);
+    if (ending) return;
+    // 途中で終わってしまった（誰かが止めた・PowerShell が落ちた）ので立ち上げ直す。うまくいかなかったときは1分おきにやり直す
+    const wait = awakeOk === false ? 60000 : 3000;
+    if (awakeOk) { console.log("（PCのスリープを止める見張り役が止まったので、立ち上げ直します）"); awakeOk = null; }
+    setTimeout(keepAwake, wait);
+  });
 }
 
-// スマホで開く QR コードを PC の画面に出す。起動のたびに、この PC の今のアドレスで作り直す（アドレスが変わっても開けるように）。
-// QR コードは pc/make_qr.py（Python）で作る。作り直せなかったときは前に作ったものを出す
+// スマホで開く QR コードを PC の画面（ブラウザ）に出す。起動のたびに、この PC の今のアドレスで作り直す（アドレスが変わっても開けるように）。
+// QR コードは pc/make_qr.py（Python）で作る。作り直せなかったときは前に作ったものを出す。
+// 写真アプリで開くと画像ファイルをつかんだままになり、次に起動したとき作り直せないので、ブラウザ（/qr）で見せる
 const QR_PNG = path.join(__dirname, "..", "0_スマホで開くQRコード.png");
+const QR_PAGE = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>薬袋プリント QRコード</title>
+<style>body{margin:16px;text-align:center;font-family:"BIZ UDGothic",Meiryo,sans-serif;background:#fff;color:#111}
+img{max-width:95vw;max-height:80vh}p{font-size:20px;margin:10px}#st{font-weight:bold}.ok{color:#11772d}.ng{color:#c00}</style></head>
+<body><img src="/qr.png?t=${Date.now()}" alt="スマホで開くQRコード">
+<p id="st"></p><p>このページは閉じてもかまいません。<b>黒い画面（薬袋プリント）は閉じないでください。</b></p>
+<script>const st=document.getElementById("st");
+async function check(){try{const r=await fetch("/api/ping",{cache:"no-store"});if(!(await r.json()).ok)throw 0;st.className="ok";st.textContent="● PCの準備ができています（スマホからこのQRコードを読み取れます）";}
+catch(e){st.className="ng";st.textContent="✕ PCのサーバーが止まっています。「00_薬袋プリント」の「薬袋プリントを起動.bat」をダブルクリックしてください";}}
+check();setInterval(check,5000);</script></body></html>`;
 function showQR(remake) {
   let shown = false;
   const open = () => {
     if (shown) return; shown = true;
     if (!fs.existsSync(QR_PNG)) return console.log("（QRコードを作れませんでした。上のアドレスをスマホで開いてください）");
-    spawn("explorer.exe", [QR_PNG], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+    spawn("explorer.exe", [`http://127.0.0.1:${PORT}/qr`], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
   };
   if (!remake) return open();
   const py = spawn("python", [path.join(__dirname, "make_qr.py")], { env: { ...process.env, PYTHONUTF8: "1" }, windowsHide: true, stdio: "ignore" });
@@ -65,6 +95,15 @@ const server = http.createServer((req, res) => {
   if (!isLocal(req.socket.remoteAddress)) { res.writeHead(403); return res.end(); }
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/api/ping") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ ok: true, model: MODEL })); }
+  // PC の画面に出す QR コード（この PC からだけ）
+  if (url.pathname === "/qr" || url.pathname === "/qr.png") {
+    if (!/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress)) { res.writeHead(404); return res.end(); }
+    if (url.pathname === "/qr") { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }); return res.end(QR_PAGE); }
+    return fs.readFile(QR_PNG, (e, b) => {
+      if (e) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" }); res.end(b);
+    });
+  }
   if (url.pathname === "/api/read" && req.method === "POST") {
     const chunks = []; let size = 0, over = false;
     req.on("data", c => { size += c.length; if (size > 8e6) { over = true; req.destroy(); } else chunks.push(c); });
@@ -144,7 +183,7 @@ server.listen(PORT, "0.0.0.0", () => {
   for (const ip of ips) console.log(`   http://${ip}:${PORT}/`);
   console.log(`読み取り: Claude（${MODEL}・effort ${EFFORT}）  ${claudeExe()}`);
   console.log(`見本: ${loadExamples().length}枚（pc/examples）`);
-  if (keepAwake()) console.log("この画面が開いている間は、PCがスリープしないようにしています（閉じれば元どおり）。");
+  keepAwake();
   showQR(true);
   warm(MODEL);
 });
