@@ -6,3 +6,4 @@ fonts_src/
 
 # PCで読むときの見本（実際のカルテの処方欄。PCの中だけに置く）
 pc/examples/
+__pycache__/

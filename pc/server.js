@@ -35,6 +35,22 @@ while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sle
   return true;
 }
 
+// スマホで開く QR コードを PC の画面に出す。起動のたびに、この PC の今のアドレスで作り直す（アドレスが変わっても開けるように）。
+// QR コードは pc/make_qr.py（Python）で作る。作り直せなかったときは前に作ったものを出す
+const QR_PNG = path.join(__dirname, "..", "0_スマホで開くQRコード.png");
+function showQR(remake) {
+  let shown = false;
+  const open = () => {
+    if (shown) return; shown = true;
+    if (!fs.existsSync(QR_PNG)) return console.log("（QRコードを作れませんでした。上のアドレスをスマホで開いてください）");
+    spawn("explorer.exe", [QR_PNG], { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  };
+  if (!remake) return open();
+  const py = spawn("python", [path.join(__dirname, "make_qr.py")], { env: { ...process.env, PYTHONUTF8: "1" }, windowsHide: true, stdio: "ignore" });
+  py.on("error", open);   // Python が見つからない
+  py.on("close", code => { if (code) console.log("（QRコードを作り直せなかったので、前に作ったものを表示します）"); open(); });
+}
+
 let queue = Promise.resolve();   // 1枚ずつ順に読む
 // まれに考えすぎて1分以上かかることがあるので、この秒数たっても終わらなければ、もう1つ同じ読み取りを始めて早いほうを使う
 const HEDGE_MS = 20000;
@@ -92,13 +108,43 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// もう1つ起動していたとき（bat を2回ダブルクリックしたときなど）は、動いているほうをそのまま使い、QR コードだけ出して閉じる
+server.on("error", e => {
+  if (e.code !== "EADDRINUSE") throw e;
+  let done = false;
+  const answer = ok => {
+    if (done) return; done = true;
+    if (ok) {
+      console.log("薬袋プリントは、もう起動しています（ほかの黒い画面で動いています）。そのまま使えます。");
+      console.log("スマホで開くQRコードを表示します。この画面は15秒後に自動で閉じます。");
+      showQR(false);
+      setTimeout(() => process.exit(0), 15000);
+    } else {
+      console.log(`起動できませんでした（${PORT}番の接続口を、ほかのソフトが使っています）。`);
+      console.log("前に開いた薬袋プリントの黒い画面が残っていたら閉じてから、もう一度ダブルクリックしてください。それでもだめなときは、PCを再起動してください。");
+      process.exitCode = 1;
+    }
+  };
+  const req = http.get({ host: "127.0.0.1", port: PORT, path: "/api/ping", timeout: 4000 }, r => {
+    let body = ""; r.on("data", c => body += c);
+    r.on("end", () => { let ok = false; try { ok = !!JSON.parse(body).ok; } catch (x) { /* 薬袋プリントではない */ } answer(ok); });
+  });
+  req.on("timeout", () => req.destroy());
+  req.on("error", () => answer(false));
+});
+
 server.listen(PORT, "0.0.0.0", () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter(a => a && a.family === "IPv4" && !a.internal).map(a => a.address);
-  console.log("薬袋プリント（PCで読む）を起動しました。この画面は閉じないでください。");
-  console.log("スマホ（院内のWi-Fi）で次のアドレスを開いてください:");
+  console.log("薬袋プリント（PCで読む）を起動しました。");
+  console.log("スマホで開くQRコードを、このあとPCの画面に出します。スマホのカメラで読み取ってください。");
+  console.log("");
+  console.log("★ この黒い画面を閉じると、スマホから使えなくなります。じゃまなときは右上の「ー」で小さくしてください。");
+  console.log("");
+  console.log("QRコードが読めないときは、スマホ（院内のWi-Fi）で次のアドレスを開いてください:");
   for (const ip of ips) console.log(`   http://${ip}:${PORT}/`);
   console.log(`読み取り: Claude（${MODEL}・effort ${EFFORT}）  ${claudeExe()}`);
   console.log(`見本: ${loadExamples().length}枚（pc/examples）`);
   if (keepAwake()) console.log("この画面が開いている間は、PCがスリープしないようにしています（閉じれば元どおり）。");
+  showQR(true);
   warm(MODEL);
 });
