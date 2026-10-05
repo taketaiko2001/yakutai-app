@@ -178,6 +178,7 @@
       if (bag.dose_note && F.dose_note) T("dose_note", bag.dose_note, { y: F[lastRow || "tablet"].y });
       (bag.timing || []).forEach(O);
       T("interval", bag.interval);
+      if (bag.fasting) T("fasting", "空腹時");   // 「時間毎」の右（ストロメクトール・カルテに空腹時とある薬）
       if (bag.meal) O(bag.meal);
       if (bag.tonpuku) {
         T("tonpuku_amount", bag.tonpuku_amount);
@@ -187,6 +188,7 @@
       }
     } else {
       T("site", bag.site);
+      if (bag.fridge) T("fridge", "冷蔵庫で保管");   // 袋の左上（ベピオ・ユベラ軟膏など）
       if (bag.kind) O(bag.kind);
       if (bag.kind === "坐薬") T("zayaku_temp", bag.zayaku_temp);
     }

@@ -1,6 +1,6 @@
 // 初期データ（アプリ内で編集した内容は端末に保存され、こちらより優先されます）
 window.DEFAULT_DATA = {
- "version": 15,
+ "version": 16,
  "drugs": [
   {
    "name": "シナール配合錠",
@@ -792,13 +792,14 @@ window.DEFAULT_DATA = {
    "name": "ディフェリンゲル",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "でぃふぇりん"
    ],
-   "note": "添付文書の用法: 1日1回 就寝前",
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
    "adopted": true,
-   "site": "顔"
+   "site": "顔",
+   "fixedTimes": true
   },
   {
    "name": "ベピオゲル",
@@ -808,9 +809,10 @@ window.DEFAULT_DATA = {
    "aliases": [
     "べぴお"
    ],
-   "note": "添付文書の用法: 1日1回",
+   "note": "冷蔵庫で保管（外用薬袋の左上に書く）",
    "adopted": true,
-   "site": "顔"
+   "site": "顔",
+   "fridge": true
   },
   {
    "name": "エピデュオゲル",
@@ -1058,17 +1060,18 @@ window.DEFAULT_DATA = {
    "name": "ゼビアックス油性クリーム",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "ゼビアックスcr",
     "ゼビアックスcn",
     "ゼビアックスクリーム",
     "ぜびあっくすくりーむ"
    ],
-   "note": "添付文書の用法: 1日1回",
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
    "common": true,
    "adopted": true,
-   "site": "顔ニキビ"
+   "site": "顔ニキビ",
+   "fixedTimes": true
   },
   {
    "name": "ベピオウォッシュゲル",
@@ -1145,7 +1148,9 @@ window.DEFAULT_DATA = {
    "aliases": [
     "ケラチナミン",
     "ケラチナミンcn",
-    "けらちなみん"
+    "けらちなみん",
+    "ケラチナミンコーワクリーム",
+    "ケラチナミンコーワ"
    ],
    "note": "",
    "common": true,
@@ -1156,17 +1161,18 @@ window.DEFAULT_DATA = {
    "name": "塩化アルミニウム液",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "",
+   "times": "夜1",
    "aliases": [
     "塩Al",
     "塩化Al",
     "塩アル",
     "えんかあるみにうむ"
    ],
-   "note": "院内製剤（例: 塩Al 60cc 夜1）",
+   "note": "院内製剤（例: 塩Al 60cc 夜1）。いつも1日夜1回（カルテに回数がなくても）",
    "common": true,
    "adopted": true,
-   "site": "足汗止め"
+   "site": "足汗止め",
+   "fixedTimes": true
   },
   {
    "name": "レスタミンコーワクリーム",
@@ -1360,8 +1366,9 @@ window.DEFAULT_DATA = {
     "イベルメクチン",
     "すとろめくとーる"
    ],
-   "note": "",
-   "adopted": true
+   "note": "空腹時に飲む（のみぐすり袋の「時間毎」の右に「空腹時」と書く）",
+   "adopted": true,
+   "fasting": true
   },
   {
    "name": "セファランチン錠",
@@ -1401,6 +1408,20 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "adopted": true
+  },
+  {
+   "name": "フィナステリド錠",
+   "type": "naifuku",
+   "form": "錠剤",
+   "times": "",
+   "aliases": [
+    "フィナステリド",
+    "プロペシア",
+    "ふぃなすてりど"
+   ],
+   "note": "",
+   "adopted": true,
+   "dose": "1T"
   },
   {
    "name": "ネイリンカプセル",
@@ -1745,13 +1766,14 @@ window.DEFAULT_DATA = {
    "name": "エクロックゲル",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "エクロック",
     "えくろっく"
    ],
-   "note": "",
-   "adopted": true
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
+   "adopted": true,
+   "fixedTimes": true
   },
   {
    "name": "オロパタジン点眼液",
@@ -1765,6 +1787,22 @@ window.DEFAULT_DATA = {
    ],
    "note": "",
    "adopted": true
+  },
+  {
+   "name": "エピナスチン点眼液",
+   "type": "gaiyou",
+   "form": "点眼薬",
+   "times": "2",
+   "aliases": [
+    "エピナスチン点眼",
+    "エピナスチン点眼液",
+    "アレジオン点眼",
+    "アレジオンLX",
+    "アレジオン点眼液"
+   ],
+   "note": "",
+   "adopted": true,
+   "site": "両眼"
   },
   {
    "name": "クロベタゾールプロピオン酸エステルクリーム",
@@ -1844,8 +1882,9 @@ window.DEFAULT_DATA = {
     "スミスリン",
     "すみすりん"
    ],
-   "note": "",
-   "adopted": true
+   "note": "いつも1日1回（カルテに回数がなくても）",
+   "adopted": true,
+   "fixedTimes": true
   },
   {
    "name": "ゼフナートクリーム",
@@ -2021,9 +2060,10 @@ window.DEFAULT_DATA = {
     "ベピオlo",
     "ベピオローション"
    ],
-   "note": "",
+   "note": "冷蔵庫で保管（外用薬袋の左上に書く）",
    "adopted": true,
-   "site": "顔"
+   "site": "顔",
+   "fridge": true
   },
   {
    "name": "フェナゾール軟膏",
@@ -2074,20 +2114,22 @@ window.DEFAULT_DATA = {
     "ユベラo",
     "ユベラ軟膏"
    ],
-   "note": "",
-   "adopted": true
+   "note": "冷蔵庫で保管（外用薬袋の左上に書く）",
+   "adopted": true,
+   "fridge": true
   },
   {
    "name": "ラピフォートワイプ",
    "type": "gaiyou",
    "form": "ぬり薬",
-   "times": "1",
+   "times": "夜1",
    "aliases": [
     "ラピフォート",
     "らぴふぉーと"
    ],
-   "note": "",
-   "adopted": true
+   "note": "いつも1日夜1回（カルテに回数がなくても）",
+   "adopted": true,
+   "fixedTimes": true
   },
   {
    "name": "リンデロンVクリーム",
@@ -2177,7 +2219,9 @@ window.DEFAULT_DATA = {
     "しみ37",
     "シミ37",
     "シメ37",
-    "しみ3ツ"
+    "しみ3ツ",
+    "しみ",
+    "シミ"
    ],
    "lines": [
     "シナール配合錠 3T",
@@ -2702,6 +2746,112 @@ window.DEFAULT_DATA = {
     "保湿・顔・体",
     "ホシツ・カラダ・カオ"
    ]
+  },
+  {
+   "label": "耳",
+   "aliases": [
+    "ミミ",
+    "みみ"
+   ]
+  },
+  {
+   "label": "背中",
+   "aliases": [
+    "セナカ",
+    "せなか"
+   ]
+  },
+  {
+   "label": "両眼",
+   "aliases": [
+    "リョウガン",
+    "両目",
+    "りょうめ"
+   ]
+  },
+  {
+   "label": "陰部",
+   "aliases": [
+    "インブ",
+    "いんぶ"
+   ]
+  },
+  {
+   "label": "おしり",
+   "aliases": [
+    "オシリ",
+    "お尻",
+    "尻"
+   ]
+  },
+  {
+   "label": "体ニキビ",
+   "aliases": [
+    "カラダニキビ",
+    "からだニキビ",
+    "体にきび"
+   ]
+  },
+  {
+   "label": "背ニキビ",
+   "aliases": [
+    "セニキビ",
+    "背中ニキビ",
+    "セナカニキビ"
+   ]
+  },
+  {
+   "label": "首かゆいところ",
+   "aliases": [
+    "クビカユイトコロ",
+    "首カユイトコロ",
+    "くびかゆいところ"
+   ]
+  },
+  {
+   "label": "体赤いところ",
+   "aliases": [
+    "カラダアカイトコロ",
+    "体あかいところ",
+    "体アカイトコロ"
+   ]
+  },
+  {
+   "label": "手足わるいところ",
+   "aliases": [
+    "テアシワルイトコロ",
+    "手足ワルイトコロ"
+   ]
+  },
+  {
+   "label": "陰部しっしん",
+   "aliases": [
+    "インブシッシン",
+    "いんぶしっしん",
+    "陰部湿疹"
+   ]
+  },
+  {
+   "label": "くちびる",
+   "aliases": [
+    "クチビル",
+    "唇"
+   ]
+  },
+  {
+   "label": "くちの中",
+   "aliases": [
+    "クチノナカ",
+    "口の中",
+    "口腔内"
+   ]
+  },
+  {
+   "label": "両手",
+   "aliases": [
+    "リョウテ",
+    "りょうて"
+   ]
   }
  ],
  "layout": {
@@ -2844,6 +2994,14 @@ window.DEFAULT_DATA = {
       "size": 30,
       "maxw": 255,
       "_メモ": "「手わるい時」など、選択肢（痛い時・発熱時・かゆい時）にない使うとき"
+     },
+     "fasting": {
+      "x": 782,
+      "y": 880,
+      "align": "left",
+      "size": 34,
+      "maxw": 200,
+      "_メモ": "「空腹時」。「時間毎」の右"
      }
     },
     "marks": {
@@ -2959,6 +3117,14 @@ window.DEFAULT_DATA = {
       "align": "center",
       "size": 36,
       "maxw": 90
+     },
+     "fridge": {
+      "x": 105,
+      "y": 552,
+      "align": "left",
+      "size": 36,
+      "maxw": 330,
+      "_メモ": "「冷蔵庫で保管」。日付の行の左（袋の左上）"
      }
     },
     "marks": {
@@ -3023,14 +3189,15 @@ window.DEFAULT_DATA = {
  "rules": [
   {
    "id": "r1",
-   "kind": "all_of",
+   "kind": "any_of",
+   "type": "naifuku",
    "words": [
     "シナール",
     "ユベラ",
     "トラネキサム"
    ],
    "size": "A5",
-   "memo": "しみの3点処方"
+   "memo": "シナール・ユベラ・トラネキサム酸は日数によらず大きい袋"
   },
   {
    "id": "r2",
@@ -3064,6 +3231,329 @@ window.DEFAULT_DATA = {
    "minNo": 4,
    "size": "A5",
    "memo": "4番の容器（100g）は1個でも大きい袋（例: サヘパ-4）"
+  },
+  {
+   "id": "r6",
+   "kind": "days_at_least",
+   "n": 60,
+   "size": "A5",
+   "memo": "内服が60日分以上"
+  },
+  {
+   "id": "r7",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "オテズラ",
+    "ネイリン"
+   ],
+   "size": "A5",
+   "memo": "オテズラ・ネイリンは日数によらず大きい袋"
+  },
+  {
+   "id": "r8",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "フィナステリド",
+    "デュタステリド"
+   ],
+   "size": "A5",
+   "memo": "フィナステリド・デュタステリドは日数によらず大きい袋"
+  },
+  {
+   "id": "r9",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "ヨクイニン"
+   ],
+   "size": "A5",
+   "memo": "ヨクイニンは日数によらず大きい袋"
+  },
+  {
+   "id": "r10",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "五苓散",
+    "十味敗毒湯",
+    "白虎加人参湯"
+   ],
+   "size": "A5",
+   "memo": "五苓散・十味敗毒湯・白虎加人参湯は日数によらず大きい袋"
+  },
+  {
+   "id": "r11",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "ケトチフェン"
+   ],
+   "size": "A5",
+   "memo": "ケトチフェンシロップは日数によらず大きい袋"
+  },
+  {
+   "id": "r12",
+   "kind": "any_of",
+   "type": "naifuku",
+   "words": [
+    "メイアクト"
+   ],
+   "size": "A5",
+   "memo": "メイアクト小児用細粒は日数によらず大きい袋"
+  },
+  {
+   "id": "r13",
+   "kind": "days_at_least",
+   "words": [
+    "アメナリーフ"
+   ],
+   "n": 7,
+   "size": "A5",
+   "memo": "アメナリーフが7日分以上"
+  },
+  {
+   "id": "r14",
+   "kind": "days_at_least",
+   "words": [
+    "バラシクロビル"
+   ],
+   "n": 7,
+   "size": "A5",
+   "memo": "バラシクロビルが7日分以上"
+  },
+  {
+   "id": "r15",
+   "kind": "any_of",
+   "type": "gaiyou",
+   "words": [
+    "エクロックゲル",
+    "ラピフォートワイプ",
+    "ドボベットフォーム"
+   ],
+   "size": "A5",
+   "memo": "エクロックゲル・ラピフォートワイプ・ドボベットフォームは1個（本）でも大きい袋"
+  },
+  {
+   "id": "r16",
+   "kind": "qty_at_least",
+   "words": [
+    "デルモゾールGローション"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "デルモゾールGローションが4本（個）以上"
+  },
+  {
+   "id": "r17",
+   "kind": "qty_at_least",
+   "words": [
+    "クロベタゾールプロピオン酸エステルローション"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "クロベタゾールプロピオン酸エステルローションが4本（個）以上"
+  },
+  {
+   "id": "r18",
+   "kind": "qty_at_least",
+   "words": [
+    "パンデルローション"
+   ],
+   "n": 5,
+   "unit": "本",
+   "size": "A5",
+   "memo": "パンデルローションが5本（個）以上"
+  },
+  {
+   "id": "r19",
+   "kind": "qty_at_least",
+   "words": [
+    "ケラチナミン"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ケラチナミンコーワクリームが4本（個）以上"
+  },
+  {
+   "id": "r20",
+   "kind": "qty_at_least",
+   "words": [
+    "ロゼックスゲル"
+   ],
+   "n": 5,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ロゼックスゲルが5本（個）以上"
+  },
+  {
+   "id": "r21",
+   "kind": "qty_at_least",
+   "words": [
+    "ブイタマークリーム"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ブイタマークリームが6本（個）以上"
+  },
+  {
+   "id": "r22",
+   "kind": "qty_at_least",
+   "words": [
+    "アポハイドローション"
+   ],
+   "n": 5,
+   "unit": "本",
+   "size": "A5",
+   "memo": "アポハイドローションが5本（個）以上"
+  },
+  {
+   "id": "r23",
+   "kind": "qty_at_least",
+   "words": [
+    "ナジフロキサシンクリーム"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ナジフロキサシンクリームが6本（個）以上"
+  },
+  {
+   "id": "r24",
+   "kind": "qty_at_least",
+   "words": [
+    "ゼビアックス油性クリーム"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ゼビアックス油性クリームが6本（個）以上"
+  },
+  {
+   "id": "r25",
+   "kind": "qty_at_least",
+   "words": [
+    "ベピオゲル"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ベピオゲルが4本（個）以上"
+  },
+  {
+   "id": "r26",
+   "kind": "qty_at_least",
+   "words": [
+    "ベピオローション"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ベピオローションが4本（個）以上"
+  },
+  {
+   "id": "r27",
+   "kind": "qty_at_least",
+   "words": [
+    "ベピオウォッシュゲル"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ベピオウォッシュゲルが4本（個）以上"
+  },
+  {
+   "id": "r28",
+   "kind": "qty_at_least",
+   "words": [
+    "ゲンタマイシン"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ゲンタマイシンが6本（個）以上"
+  },
+  {
+   "id": "r29",
+   "kind": "qty_at_least",
+   "words": [
+    "ドボベット軟膏"
+   ],
+   "n": 4,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ドボベット軟膏が4本（個）以上"
+  },
+  {
+   "id": "r30",
+   "kind": "qty_at_least",
+   "words": [
+    "ドボベットゲル"
+   ],
+   "n": 3,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ドボベットゲルが3本（個）以上"
+  },
+  {
+   "id": "r31",
+   "kind": "qty_at_least",
+   "words": [
+    "ニゾラールローション"
+   ],
+   "n": 5,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ニゾラールローションが5本（個）以上"
+  },
+  {
+   "id": "r32",
+   "kind": "qty_at_least",
+   "words": [
+    "ニゾラールクリーム"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ニゾラールクリームが6本（個）以上"
+  },
+  {
+   "id": "r33",
+   "kind": "qty_at_least",
+   "words": [
+    "クリンダマイシンゲル"
+   ],
+   "n": 7,
+   "unit": "本",
+   "size": "A5",
+   "memo": "クリンダマイシンゲルが7本（個）以上"
+  },
+  {
+   "id": "r34",
+   "kind": "qty_at_least",
+   "words": [
+    "モイゼルト軟膏"
+   ],
+   "n": 6,
+   "unit": "本",
+   "size": "A5",
+   "memo": "モイゼルト軟膏が6本（個）以上"
+  },
+  {
+   "id": "r35",
+   "kind": "qty_at_least",
+   "words": [
+    "ダラシンTローション"
+   ],
+   "n": 3,
+   "unit": "本",
+   "size": "A5",
+   "memo": "ダラシンTローションが3本（個）以上"
   }
  ],
  "presets": [

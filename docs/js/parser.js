@@ -120,7 +120,7 @@
   // ---------------------------------------------------------------- 1行の解析
   const RE_DATE = /(?<!\d)(\d{1,2})\s*[.,/。、]\s*(\d{1,2})\s*[.,/。、]\s*(\d{1,2})/;
   const RE_QTY_G = /(\d+(?:\.\d+)?)\s*(カプセル|cap|ml|cc|t|錠|c|p|包|g|本|枚|個)(?![a-z])/g;
-  const RE_USAGE = /(\d)\s*[×x+]\s*(朝昼夕|朝夕|n|朝|昼|夕|タ|9|ネル前|ネ|寝|眠|就寝|vde|v\.d\.e|zde|z\.d\.e|vds|hs|h\.s)/;
+  const RE_USAGE = /(\d)\s*[×x+]\s*(空腹時?|朝昼夕|朝夕|アサ|ヒル|ユウ|n|朝|昼|夕|タ|9|ネル前|ネ|寝|眠|就寝|vde|v\.d\.e|zde|z\.d\.e|vds|hs|h\.s)/;
   const RE_DAYS = /(\d{1,3})\s*(?:td|t\.d|日分)/;
   const RE_DAYS_OCR = /(?<!\d)(\d{1,3})(?:70|20|7d|2d|t0|to|id|1d)(?![\da-z])/;
   const RE_TONPUKU = /頓|トンプク|prn|屯/;
@@ -164,13 +164,15 @@
     if (m) {
       const times = +m[1], code = m[2];
       u.times = String(times);
-      if (code === "n") {
+      if (/^空腹/.test(code)) {
+        u.timing = []; u.meal = ""; u.fasting = true;   // 空腹時（朝・昼・夕や食後には丸を付けない）
+      } else if (code === "n") {
         u.meal = "食後";
         u.timing = { 3: ["朝", "昼", "夕"], 2: ["朝", "夕"] }[times] || [];
         if (times === 1) u.unsure = ["timing"];
-      } else if (["朝昼夕", "朝夕", "朝", "昼", "夕", "タ", "9"].includes(code)) {
+      } else if (["朝昼夕", "朝夕", "朝", "昼", "夕", "タ", "9", "アサ", "ヒル", "ユウ"].includes(code)) {   // カタカナの「1×アサ」も朝
         u.meal = "食後";
-        u.timing = { "朝昼夕": ["朝", "昼", "夕"], "朝夕": ["朝", "夕"], "朝": ["朝"], "昼": ["昼"] }[code] || ["夕"];
+        u.timing = { "朝昼夕": ["朝", "昼", "夕"], "朝夕": ["朝", "夕"], "朝": ["朝"], "昼": ["昼"], "アサ": ["朝"], "ヒル": ["昼"] }[code] || ["夕"];
         if (code === "9") u.unsure = ["timing"];
       } else if (["ネル前", "ネ", "寝", "眠", "就寝", "vds", "hs", "h.s"].includes(code)) {
         u.timing = ["ねる前"]; u.meal = "";
@@ -181,6 +183,7 @@
       }
     }
     for (const w of ["食後", "食前", "食間"]) if (t.includes(w)) u.meal = w;
+    if (t.includes("空腹")) { u.fasting = true; u.meal = ""; }
     m = t.match(RE_DAYS);
     if (m) u.days = m[1];
     else if (u.times || !qtyMatches(t).length) {
@@ -212,7 +215,8 @@
       const n = u.times, tm = u.timing || [], meal = u.meal || "";
       const def = { 3: ["朝", "昼", "夕"], 2: ["朝", "夕"] }[n];
       let code;
-      if (meal === "食前") code = "vdE";
+      if (u.fasting) code = "空腹時";
+      else if (meal === "食前") code = "vdE";
       else if (meal === "食間") code = "zdE";
       else if (tm.length === 1 && tm[0] === "ねる前") code = "ねる前";
       else if (tm.length && (!def || tm.join() !== def.join())) code = tm.join("");
@@ -228,7 +232,7 @@
     return { type, drugs: [], drug_names: [], source: "", times: "", days: "", powder: "", capsule: "", tablet: "",
       dose_note: "", timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "",
       tonpuku_when: [], tonpuku_note: "", kind: "", site: "", zayaku_temp: "", qty: null, unit: "", containers: 0,
-      uncertain: [], comment: "", unknown_drug: "", siteFlag: "", siteNote: "" };
+      uncertain: [], comment: "", unknown_drug: "", siteFlag: "", siteNote: "", fridge: false, fasting: false };
   }
 
   // ---------------------------------------------------------------- 全体
@@ -394,6 +398,15 @@
       }
     }
     flush({}, ["times", "days"]);
+    // ヘパリン類似物質は、部位が同じなら剤形が違っても1つの袋にまとめる（例: ヘパlo と ヘパcr を両方「顔保湿」に）
+    for (let i = 0; i < res.bags.length; i++) {
+      const a = res.bags[i];
+      if (!isHeparinBag(a) || !a.site) continue;
+      for (let j = i + 1; j < res.bags.length; j++) {
+        const b = res.bags[j];
+        if (isHeparinBag(b) && b.site === a.site && b.times === a.times && mergeInto(a, b, "同じ部位のヘパリン類似物質を1つの袋にまとめました")) { res.bags.splice(j, 1); j--; }
+      }
+    }
     res.bags.forEach(b => {
       // 処置の欄の薬は、数量も部位も書かれない
       if (b.type === "gaiyou" && !b.qty && !b.containers && !b.site && !b._ditto && !b.unknown_drug) {
@@ -453,7 +466,7 @@
 
     // 用法が決まっている薬（五苓散＝朝昼夕食前、十味敗毒湯＝朝夕食前、ビラスチン＝寝る前）は、書き方によらずその用法
     const fixed = items.map(it => it.drug.fixedUsage).find(Boolean);
-    if (fixed && !usage.tonpuku) {
+    if (fixed && !usage.tonpuku && !usage.fasting) {   // カルテに「空腹時」とあればそちらを優先（例: ビラスチン 1×空腹時）
       usage = Object.assign({}, usage, { times: fixed.times, timing: fixed.timing.slice(), meal: fixed.meal });
       ["times", "timing", "meal"].forEach(k => unsure.delete(k));
       for (let i = notes.length - 1; i >= 0; i--) if (/用法/.test(notes[i])) notes.splice(i, 1);
@@ -473,6 +486,11 @@
       bag.meal = usage.meal || "";
       if (!bag.times) { ["times", "timing", "meal"].forEach(k => unsure.add(k)); notes.push("用法（3×N など）が見つかりません"); }
       if (!bag.days) unsure.add("days");
+      // 空腹時に飲む薬（ストロメクトール）・カルテに「空腹時」とある薬：「時間毎」の右に「空腹時」と書き、時点・食事には丸を付けない
+      if (usage.fasting || items.some(it => it.drug.fasting)) {
+        bag.fasting = true; bag.timing = []; bag.meal = "";
+        unsure.delete("timing"); unsure.delete("meal");
+      }
     }
 
     const rows = {};
@@ -525,6 +543,7 @@
     const uns = new Set(unsure ? ["drugs"] : []);
     if (unsure) notes.push("薬品名の読み取りに自信がありません");
     if (drug.unknown) { bag.unknown_drug = drug.name; notes.push("薬品マスタにない薬です"); }
+    if (drug.fridge) bag.fridge = true;   // ベピオ・ユベラ軟膏など：袋の左上に「冷蔵庫で保管」
 
     const cn = body.match(RE_CONT_NO);
     const cm = cn ? null : body.match(RE_CONTAINERS);
@@ -599,8 +618,11 @@
   }
   function isDitto(s) { return /^\s*[〃々"″]+\s*$/.test(String(s || "")) || /^\s*同上\s*$/.test(String(s || "")); }
   function timesLabel(tk) { return RE_TIMES_AT.test(tk) ? tk : tk === "数" ? "1日数回" : `1日${tk}回`; }
+  function isHeparinBag(b) {
+    return b.type === "gaiyou" && b.drug_names.length > 0 && b.drug_names.every(n => /ヘパリン類似物質|ヒルドイド/.test(n));
+  }
   // 同じ部位（〃）の薬を1つの袋にまとめる
-  function mergeInto(a, b) {
+  function mergeInto(a, b, why) {
     if (!a || !b || a.type !== "gaiyou" || b.type !== "gaiyou") return false;
     a.drug_names.push(...b.drug_names);
     a.drugs.push(...b.drugs);
@@ -609,8 +631,9 @@
     else if (b.qty != null && a.qty == null) { a.qty = b.qty; a.unit = b.unit; }
     a.containers = Math.max(a.containers || 0, b.containers || 0);
     if ((b.containerNo || 0) > (a.containerNo || 0)) a.containerNo = b.containerNo;
+    a.fridge = !!(a.fridge || b.fridge);
     a.uncertain = [...new Set([...a.uncertain, ...b.uncertain.filter(x => x !== "site")])].sort();
-    a.comment = [...new Set([a.comment, b.comment, "同じ部位（〃）の薬をまとめました"].filter(Boolean))].join("・");
+    a.comment = [...new Set([a.comment, b.comment, why || "同じ部位（〃）の薬をまとめました"].filter(Boolean))].join("・");
     return true;
   }
   function matchSet(text, sets) {
@@ -672,7 +695,7 @@
   function bagToText(b, defaultTimes) {
     if (b.type === "naifuku") {
       const lines = (b.drugs || []).slice();
-      lines.push(usageText({ times: b.times, timing: b.timing, meal: b.meal, days: b.days, tonpuku: b.tonpuku, count: b.tonpuku_count, when: b.tonpuku_when, note: b.tonpuku_note }));
+      lines.push(usageText({ times: b.times, timing: b.timing, meal: b.meal, days: b.days, tonpuku: b.tonpuku, count: b.tonpuku_count, when: b.tonpuku_when, note: b.tonpuku_note, fasting: b.fasting }));
       return lines.join("\n");
     }
     return (b.drugs || []).map((name, i) => {

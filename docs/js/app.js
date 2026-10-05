@@ -2,7 +2,7 @@
 // 薬袋プリント（スマホ版）画面の処理。すべて端末の中で動く。
 const $ = s => document.querySelector(s);
 const PX_PER_MM = 96 / 25.4;
-const APP_VERSION = "2026-10-02b";
+const APP_VERSION = "2026-10-05";
 const PAPERS = { A4: [210, 297], A5: [148, 210], A6: [105, 148], hagaki: [100, 148] };
 const TIMINGS = ["朝", "昼", "夕", "ねる前"], MEALS = ["食後", "食前", "食間"], TONPUKU_WHEN = ["痛い時", "発熱時", "かゆい時"];
 const KINDS = KarteParser.GAIYOU_KINDS;
@@ -424,13 +424,15 @@ function bagCard(b, i) {
     h += `<div class="f">1日${inp(b, "times")}回 ${inp(b, "days")}日分</div>`;
     h += `<div class="f"><span class="lbl">1回に</span>錠剤${inp(b, "tablet")}錠 カプセル${inp(b, "capsule")}個 こな薬${inp(b, "powder")}包</div>`;
     h += `<div class="f"><span class="lbl">補足</span>${inp(b, "dose_note", "wide-in", "例: 3種類")}</div>`;
-    h += `<div class="f"><span class="lbl">時点</span>${chipGroup(i, "timing", TIMINGS, b.timing, true, b.uncertain.includes("timing"))} ${inp(b, "interval")}時間毎</div>`;
+    h += `<div class="f"><span class="lbl">時点</span>${chipGroup(i, "timing", TIMINGS, b.timing, true, b.uncertain.includes("timing"))} ${inp(b, "interval")}時間毎
+      <label class="chip"><input type="checkbox" data-key="fasting" ${b.fasting ? "checked" : ""}><span>空腹時</span></label></div>`;
     h += `<div class="f"><span class="lbl">食事</span>${chipGroup(i, "meal", [...MEALS, "なし"], b.meal, false, b.uncertain.includes("meal"))}</div>`;
     h += `<div class="f"><label class="chip"><input type="checkbox" data-key="tonpuku" ${b.tonpuku ? "checked" : ""}><span>とんぷく</span></label></div>`;
     if (b.tonpuku) h += `<div class="f"><span class="lbl"></span>1回${inp(b, "tonpuku_amount")}個(包) ${inp(b, "tonpuku_count")}回分 ${chipGroup(i, "tonpuku_when", TONPUKU_WHEN, b.tonpuku_when, true, b.uncertain.includes("tonpuku_when"))} ${inp(b, "tonpuku_note", "wide-in", "ほかの時（例: 手わるい時）")}</div>`;
   } else {
     h += `<div class="f">1日${inp(b, "times")}回 <span class="lbl" style="width:auto">部位</span>${inp(b, "site", "wide-in", "例: 顔保湿")}</div>`;
     h += `<div class="f"><span class="lbl">種類</span>${chipGroup(i, "kind", KINDS, b.kind, false, b.uncertain.includes("kind"))}</div>`;
+    h += `<div class="f"><span class="lbl"></span><label class="chip"><input type="checkbox" data-key="fridge" ${b.fridge ? "checked" : ""}><span>冷蔵庫で保管（左上に書く）</span></label></div>`;
     if (b.kind === "坐薬") h += `<div class="f"><span class="lbl"></span>発熱時に${inp(b, "zayaku_temp")}℃以上</div>`;
   }
   const info = [`<b>薬</b> ${esc((b.drugs || []).join("、") || "（未入力）")}`];
@@ -462,6 +464,7 @@ function onBagInput(e) {
     const set = new Set(b[key]); t.checked ? set.add(t.value) : set.delete(t.value);
     b[key] = (key === "timing" ? TIMINGS : TONPUKU_WHEN).filter(x => set.has(x));
   } else if (key === "tonpuku") { b.tonpuku = t.checked; rerender = true; }
+  else if (key === "fridge" || key === "fasting") b[key] = t.checked;
   else if (t.type === "radio") { b[key] = t.value; rerender = key === "kind"; }
   else b[key] = toHalf(t.value);
   if (b.uncertain.includes(key)) {
@@ -789,8 +792,8 @@ function savePrintSettings() {
 }
 const TEST_BAGS = {
   naifuku: { type: "naifuku", times: "3", days: "14", powder: "1", capsule: "1", tablet: "各1", dose_note: "2種類",
-    timing: ["朝", "昼", "夕", "ねる前"], interval: "6", meal: "食後", tonpuku: true, tonpuku_amount: "1", tonpuku_count: "5", tonpuku_when: ["痛い時", "かゆい時"], tonpuku_note: "手わるい時" },
-  gaiyou: { type: "gaiyou", times: "2", site: "足のつめ", kind: "ぬり薬" },
+    timing: ["朝", "昼", "夕", "ねる前"], interval: "6", meal: "食後", tonpuku: true, tonpuku_amount: "1", tonpuku_count: "5", tonpuku_when: ["痛い時", "かゆい時"], tonpuku_note: "手わるい時", fasting: true },
+  gaiyou: { type: "gaiyou", times: "2", site: "足のつめ", kind: "ぬり薬", fridge: true },
 };
 async function testPrint(type, size, art) {
   busy(true, "テスト用PDFを作っています…");
@@ -861,6 +864,6 @@ function init() {
 function emptyBag(type) {
   return { type, drugs: [], drug_names: [], source: "", times: "", days: "", powder: "", capsule: "", tablet: "", dose_note: "",
     timing: [], interval: "", meal: "", tonpuku: false, tonpuku_amount: "", tonpuku_count: "", tonpuku_when: [], tonpuku_note: "", kind: "", site: "",
-    zayaku_temp: "", qty: null, unit: "", containers: 0, uncertain: [], comment: "", unknown_drug: "", sizeReason: "" };
+    zayaku_temp: "", qty: null, unit: "", containers: 0, uncertain: [], comment: "", unknown_drug: "", sizeReason: "", fridge: false, fasting: false };
 }
 init();

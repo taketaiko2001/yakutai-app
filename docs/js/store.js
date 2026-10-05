@@ -61,11 +61,15 @@
     for (const x of data.doctors) { const def = defaults().doctors.find(y => y.mark === x.mark); if (def && def.alt && !x.alt) x.alt = def.alt; }
     data.sets = data.sets || [];
     addBy(data.sets, D.sets || [], "name");
+    for (const st of data.sets) {                 // セットの書き方の揺れ（例: しみ3つ を「しみ」だけで書く）
+      const def = (D.sets || []).find(x => x.name === st.name);
+      if (def) st.aliases = [...new Set([...(st.aliases || []), ...(def.aliases || [])])];
+    }
     for (const d of data.drugs) {                 // 初期データ側で増えた略称・印などを反映
       const def = D.drugs.find(x => x.name === d.name);
       if (!def) continue;
       d.aliases = [...new Set([...(d.aliases || []), ...(def.aliases || [])])];
-      for (const k of ["common", "mix", "dose", "adopted", "syrup", "site"]) if (def[k] != null && d[k] == null) d[k] = def[k];
+      for (const k of ["common", "mix", "dose", "adopted", "syrup", "site", "fridge", "fasting"]) if (def[k] != null && d[k] == null) d[k] = def[k];
       if (def.fixedUsage) d.fixedUsage = def.fixedUsage;   // 用法が決まっている内服（五苓散・十味敗毒湯＝食前、ビラスチン＝寝る前）
       if (def.fixedTimes) { d.fixedTimes = true; d.times = def.times; d.note = def.note; }   // 回数が決まっている薬（クレナフィン・ルコナック＝夜1回）
     }
@@ -90,14 +94,27 @@
 
   // ---------------------------------------------------------------- 袋サイズのルール
   function bagWords(bag) { return [...(bag.drug_names || []), ...(bag.drugs || [])].join(" "); }
+  // 本と個は同じ数え方として扱う（カルテが「4本」でも「4個」でも「4本（個）以上」のルールに当てる）
+  const COUNT_UNITS = ["本", "個"];
+  function unitMatches(ruleUnit, bagUnit) {
+    return bagUnit === ruleUnit || (COUNT_UNITS.includes(ruleUnit) && COUNT_UNITS.includes(bagUnit));
+  }
   function ruleMatches(rule, bag) {
     const w = bagWords(bag);
+    if (rule.type && bag.type !== rule.type) return false;   // 内服だけ・外用だけのルール（例: ユベラ錠は内服だけ。ユベラ軟膏は含めない）
     switch (rule.kind) {
       case "all_of": return rule.words.length > 0 && rule.words.every(x => w.includes(x));
       case "any_of": return rule.words.some(x => x && w.includes(x));
       case "qty_at_least": {
         if (rule.words && rule.words.length && !rule.words.some(x => w.includes(x))) return false;
-        return bag.type === "gaiyou" && bag.unit === rule.unit && (+bag.qty || 0) >= rule.n;
+        if (bag.type !== "gaiyou") return false;
+        // 薬の名前のルールは、その薬の分だけ数える（「〃」で同じ袋にまとめたほかの薬の本数は足さない）
+        if (rule.words && rule.words.length) {
+          const own = (bag.drugs || []).filter(d => rule.words.some(x => d.includes(x)))
+            .map(d => d.match(/(\d+(?:\.\d+)?)\s*(本|個|g|mL|cc|枚)$/)).filter(m => m && unitMatches(rule.unit, m[2]));
+          if (own.length) return own.reduce((a, m) => a + +m[1], 0) >= rule.n;
+        }
+        return unitMatches(rule.unit, bag.unit) && (+bag.qty || 0) >= rule.n;
       }
       case "containers_at_least": return (+bag.containers || 0) >= rule.n && (!rule.minNo || (+bag.containerNo || 0) >= rule.minNo);
       case "days_at_least": return bag.type === "naifuku" && (+bag.days || 0) >= rule.n &&
@@ -112,10 +129,12 @@
   function ruleText(r) {
     const big = r.size === "A5" ? "大きい袋" : "小さい袋";
     const ws = (r.words || []).join("・");
+    const only = r.type === "naifuku" ? "（内服）" : r.type === "gaiyou" ? "（外用）" : "";
+    const unit = COUNT_UNITS.includes(r.unit) ? "本（個）" : r.unit;
     switch (r.kind) {
-      case "all_of": return `『${ws}』がすべて入っている → ${big}`;
-      case "any_of": return `『${ws}』のどれかが入っている → ${big}`;
-      case "qty_at_least": return `${ws ? "『" + ws + "』が" : ""}${r.n}${r.unit}以上 → ${big}`;
+      case "all_of": return `${only}『${ws}』がすべて入っている → ${big}`;
+      case "any_of": return `${only}『${ws}』のどれかが入っている → ${big}`;
+      case "qty_at_least": return `${ws ? "『" + ws + "』が" : ""}${r.n}${unit}以上 → ${big}`;
       case "containers_at_least": return `${r.minNo ? r.minNo + "番以上の" : ""}混合容器が${r.n}個以上 → ${big}`;
       case "days_at_least": return `${ws ? "『" + ws + "』で" : "内服が"}${r.n}日分以上 → ${big}`;
       default: return "";
